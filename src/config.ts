@@ -14,10 +14,19 @@ export interface ZoneConfig {
   selectedRecordIds: string[];
 }
 
+export interface AccessPolicyConfig {
+  appId: string;
+  appName: string;
+  policyId: string;
+  policyName: string;
+}
+
 export interface Config {
   apiKey: string;
   email?: string;
+  accountId?: string;
   zones: ZoneConfig[];
+  accessPolicies?: AccessPolicyConfig[];
   updateInterval?: number; // in minutes, default: 5
 }
 

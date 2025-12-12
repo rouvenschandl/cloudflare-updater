@@ -1,8 +1,14 @@
 import { select, confirm, password, checkbox, input } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { CloudflareService, type Zone } from './cloudflare.js';
-import { saveConfig, loadConfig, deleteConfig, hasConfig } from './config.js';
+import { CloudflareService, type Zone, type AccessApp, type AccessPolicy } from './cloudflare.js';
+import {
+  saveConfig,
+  loadConfig,
+  deleteConfig,
+  hasConfig,
+  type AccessPolicyConfig,
+} from './config.js';
 import { startUpdateLoop, runSingleUpdate } from './updater.js';
 
 interface ZoneConfig {
@@ -114,6 +120,111 @@ async function promptForDNSRecords(
 }
 
 /**
+ * Prompts the user for their Cloudflare Account ID
+ */
+async function promptForAccountId(): Promise<string> {
+  console.log(chalk.bold.cyan('\n🔑 Account ID Required for Access Policies\n'));
+  console.log(
+    chalk.gray(
+      'You can find your Account ID in the Cloudflare dashboard URL or account settings.\n'
+    )
+  );
+
+  const accountId = await input({
+    message: 'Cloudflare Account ID:',
+    validate: (value) => {
+      if (!value || value.trim().length === 0) {
+        return 'Account ID must not be empty';
+      }
+      return true;
+    },
+  });
+
+  return accountId.trim();
+}
+
+/**
+ * Shows all available Access applications and lets the user select one
+ */
+async function promptForAccessApp(
+  cfService: CloudflareService,
+  accountId: string
+): Promise<AccessApp | null> {
+  const spinner = ora('Loading Access applications...').start();
+
+  try {
+    const apps = await cfService.getAccessApps(accountId);
+    spinner.succeed(`${apps.length} Access application(s) found`);
+
+    if (apps.length === 0) {
+      console.log(chalk.yellow('\n⚠ No Access applications found.\n'));
+      return null;
+    }
+
+    console.log(chalk.bold.cyan('\n🔐 Available Access Applications:\n'));
+
+    const selectedAppId = await select({
+      message: 'Select an Access application:',
+      choices: apps.map((app) => ({
+        name: `${app.name} ${chalk.gray(`(${app.domain})`)}`,
+        value: app.id,
+        description: `App ID: ${app.id}`,
+      })),
+    });
+
+    const selectedApp = apps.find((a) => a.id === selectedAppId);
+    return selectedApp || null;
+  } catch (error) {
+    spinner.fail('Error loading Access applications');
+    throw error;
+  }
+}
+
+/**
+ * Shows Access policies with IP range includes and lets the user select them
+ */
+async function promptForAccessPolicies(
+  cfService: CloudflareService,
+  accountId: string,
+  appId: string
+): Promise<AccessPolicy[]> {
+  const spinner = ora('Loading Access policies...').start();
+
+  try {
+    const policies = await cfService.getAccessPolicies(accountId, appId);
+    spinner.succeed(`${policies.length} policy/policies with IP range includes found`);
+
+    if (policies.length === 0) {
+      console.log(chalk.yellow('\n⚠ No policies with IP range includes found.\n'));
+      return [];
+    }
+
+    console.log(chalk.bold.cyan('\n📝 Access Policies with IP Range Includes:\n'));
+
+    const selectedPolicyIds = await checkbox({
+      message: 'Select policies to update automatically:',
+      choices: policies.map((policy) => {
+        const ipRanges = policy.include
+          .filter((inc) => inc.ip)
+          .map((inc) => inc.ip!.ip)
+          .join(', ');
+        return {
+          name: `${chalk.cyan(policy.name)} ${chalk.gray(`(${policy.decision})`)} → ${chalk.yellow(ipRanges)}`,
+          value: policy.id,
+          checked: false,
+        };
+      }),
+      required: false,
+    });
+
+    return policies.filter((p) => selectedPolicyIds.includes(p.id));
+  } catch (error) {
+    spinner.fail('Error loading Access policies');
+    throw error;
+  }
+}
+
+/**
  * Performs the initial setup
  * @param existingApiKey - Optional API key from existing config (for reconfiguration)
  */
@@ -165,7 +276,60 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
     // Calculate total records
     const totalRecords = zones.reduce((sum, zone) => sum + zone.selectedRecordIds.length, 0);
 
-    // 4. Ask for update interval
+    // 4. Configure Access Policies (optional)
+    let accountId: string | undefined;
+    const accessPolicies: AccessPolicyConfig[] = [];
+
+    const configureAccess = await confirm({
+      message: 'Do you want to configure Access policies?',
+      default: false,
+    });
+
+    if (configureAccess) {
+      // Ask for Account ID
+      accountId = await promptForAccountId();
+
+      let addMoreApps = true;
+
+      while (addMoreApps) {
+        const selectedApp = await promptForAccessApp(cfService, accountId);
+
+        if (selectedApp) {
+          const selectedPolicies = await promptForAccessPolicies(
+            cfService,
+            accountId,
+            selectedApp.id
+          );
+
+          if (selectedPolicies.length > 0) {
+            selectedPolicies.forEach((policy) => {
+              accessPolicies.push({
+                appId: selectedApp.id,
+                appName: selectedApp.name,
+                policyId: policy.id,
+                policyName: policy.name,
+              });
+            });
+            console.log(
+              chalk.green(
+                `\n✓ ${selectedPolicies.length} policy/policies selected for ${selectedApp.name}\n`
+              )
+            );
+          } else {
+            console.log(chalk.yellow(`\n⚠ No policies selected for ${selectedApp.name}.\n`));
+          }
+
+          addMoreApps = await confirm({
+            message: 'Do you want to add another Access application?',
+            default: false,
+          });
+        } else {
+          addMoreApps = false;
+        }
+      }
+    }
+
+    // 5. Ask for update interval
     const intervalInput = await input({
       message: 'Update interval in minutes (default: 5):',
       default: '5',
@@ -180,16 +344,24 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
 
     const updateInterval = parseInt(intervalInput, 10);
 
-    // 5. Save configuration
+    // 6. Save configuration
+    const totalAccessPolicies = accessPolicies.length;
+    let confirmMessage = `Do you want to save this configuration?\n  Zones: ${chalk.cyan(zones.length.toString())}\n  DNS Records: ${chalk.cyan(totalRecords.toString())}`;
+    if (totalAccessPolicies > 0) {
+      confirmMessage += `\n  Access Policies: ${chalk.cyan(totalAccessPolicies.toString())}`;
+    }
+
     const shouldSave = await confirm({
-      message: `Do you want to save this configuration?\n  Zones: ${chalk.cyan(zones.length.toString())}\n  Total Records: ${chalk.cyan(totalRecords.toString())}`,
+      message: confirmMessage,
       default: true,
     });
 
     if (shouldSave) {
       await saveConfig({
         apiKey,
+        accountId,
         zones,
+        accessPolicies: accessPolicies.length > 0 ? accessPolicies : undefined,
         updateInterval,
       });
 
@@ -202,6 +374,27 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
           `  ${chalk.cyan('●')} ${chalk.bold(zone.zoneName)} - ${zone.selectedRecordIds.length} record(s)`
         );
       });
+
+      if (accessPolicies.length > 0) {
+        console.log(chalk.bold.cyan('\n🔐 Configured Access Policies:\n'));
+        const appGroups = accessPolicies.reduce(
+          (acc, policy) => {
+            if (!acc[policy.appId]) {
+              acc[policy.appId] = { appName: policy.appName, policies: [] };
+            }
+            acc[policy.appId].policies.push(policy.policyName);
+            return acc;
+          },
+          {} as Record<string, { appName: string; policies: string[] }>
+        );
+
+        Object.values(appGroups).forEach((group) => {
+          console.log(
+            `  ${chalk.cyan('●')} ${chalk.bold(group.appName)} - ${group.policies.length} policy/policies`
+          );
+        });
+      }
+
       console.log();
     } else {
       console.log(chalk.yellow('\n⚠ Configuration was not saved.\n'));
@@ -268,6 +461,61 @@ export async function showRecordsList(): Promise<void> {
     }
   }
 
+  // Display Access Policies
+  if (config.accessPolicies && config.accessPolicies.length > 0 && config.accountId) {
+    console.log(chalk.bold.cyan('\n🔐 Configured Access Policies:\n'));
+
+    const appGroups = config.accessPolicies.reduce(
+      (acc, policy) => {
+        if (!acc[policy.appId]) {
+          acc[policy.appId] = { appName: policy.appName, policies: [] };
+        }
+        acc[policy.appId].policies.push(policy);
+        return acc;
+      },
+      {} as Record<string, { appName: string; policies: AccessPolicyConfig[] }>
+    );
+
+    for (const [appId, group] of Object.entries(appGroups)) {
+      console.log(chalk.bold(`\n  Application: ${chalk.cyan(group.appName)}`));
+      console.log(chalk.gray(`  ════════════════════════════════════════\n`));
+
+      const spinner = ora(`Loading policies for ${group.appName}...`).start();
+
+      try {
+        const policies = await cfService.getAccessPolicies(config.accountId, appId);
+        const selectedPolicies = policies.filter((p) =>
+          group.policies.some((gp) => gp.policyId === p.id)
+        );
+
+        spinner.stop();
+
+        if (selectedPolicies.length === 0) {
+          console.log(chalk.yellow('    No policies configured\n'));
+          continue;
+        }
+
+        selectedPolicies.forEach((policy) => {
+          const ipRanges = policy.include
+            .filter((inc) => inc.ip)
+            .map((inc) => inc.ip!.ip)
+            .join(', ');
+          const decisionBadge =
+            policy.decision === 'allow' ? chalk.green('[Allow]') : chalk.red('[Deny]');
+          console.log(
+            `    ${decisionBadge} ${chalk.white(policy.name.padEnd(30))} → ${chalk.yellow(ipRanges)}`
+          );
+        });
+        console.log();
+      } catch (error) {
+        spinner.fail(`Failed to load policies for ${group.appName}`);
+        console.log(
+          chalk.red(`    Error: ${error instanceof Error ? error.message : 'Unknown error'}\n`)
+        );
+      }
+    }
+  }
+
   console.log(chalk.gray('\n  Press any key to continue...'));
   await new Promise<void>((resolve) => {
     process.stdin.setRawMode(true);
@@ -292,11 +540,15 @@ export async function showCurrentConfig(): Promise<void> {
   }
 
   const totalRecords = config.zones.reduce((sum, zone) => sum + zone.selectedRecordIds.length, 0);
+  const totalAccessPolicies = config.accessPolicies?.length || 0;
   const updateInterval = config.updateInterval || 5;
 
   console.log(chalk.bold.cyan('\n⚙️  Current Configuration:\n'));
   console.log(`  ${chalk.bold('Zones:')}    ${config.zones.length}`);
-  console.log(`  ${chalk.bold('Records:')} ${totalRecords}`);
+  console.log(`  ${chalk.bold('DNS Records:')} ${totalRecords}`);
+  if (totalAccessPolicies > 0) {
+    console.log(`  ${chalk.bold('Access Policies:')} ${totalAccessPolicies}`);
+  }
   console.log(`  ${chalk.bold('Update Interval:')} ${updateInterval} minute(s)`);
   console.log(`  ${chalk.bold('API Key:')} ${chalk.gray('*'.repeat(20))}`);
 
@@ -306,6 +558,27 @@ export async function showCurrentConfig(): Promise<void> {
       `    ${chalk.cyan('●')} ${zone.zoneName.padEnd(30)} - ${zone.selectedRecordIds.length} record(s)`
     );
   });
+
+  if (config.accessPolicies && config.accessPolicies.length > 0) {
+    console.log(chalk.bold.cyan('\n  Configured Access Applications:\n'));
+    const appGroups = config.accessPolicies.reduce(
+      (acc, policy) => {
+        if (!acc[policy.appId]) {
+          acc[policy.appId] = { appName: policy.appName, policies: [] };
+        }
+        acc[policy.appId].policies.push(policy.policyName);
+        return acc;
+      },
+      {} as Record<string, { appName: string; policies: string[] }>
+    );
+
+    Object.values(appGroups).forEach((group) => {
+      console.log(
+        `    ${chalk.cyan('●')} ${group.appName.padEnd(30)} - ${group.policies.length} policy/policies`
+      );
+    });
+  }
+
   console.log();
 }
 

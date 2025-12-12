@@ -15,6 +15,23 @@ interface UpdateResult {
   error?: string;
 }
 
+interface AccessUpdateResult {
+  appId: string;
+  appName: string;
+  policyId: string;
+  policyName: string;
+  oldIP: string;
+  newIP: string;
+  success: boolean;
+  error?: string;
+}
+
+// Normalize an IP string by stripping a CIDR suffix (e.g., /32, /128) for comparisons
+function normalizeIp(ip?: string): string | undefined {
+  if (!ip) return undefined;
+  return ip.split('/')[0];
+}
+
 /**
  * Checks and updates DNS records if IP has changed
  */
@@ -142,6 +159,144 @@ async function updateDNSRecords(): Promise<UpdateResult[]> {
 }
 
 /**
+ * Checks and updates Access policies if IP has changed
+ */
+async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
+  const config = await loadConfig();
+  if (!config || !config.accessPolicies || !config.accountId) {
+    return [];
+  }
+
+  const { ipv4 } = await getPublicIPs();
+  if (!ipv4) {
+    console.log(chalk.yellow('\n⚠ No IPv4 address available for Access policy updates\n'));
+    return [];
+  }
+
+  const cfService = new CloudflareService(config.apiKey);
+  const results: AccessUpdateResult[] = [];
+
+  // Group policies by app
+  const appGroups = config.accessPolicies.reduce(
+    (acc, policy) => {
+      if (!acc[policy.appId]) {
+        acc[policy.appId] = { appName: policy.appName, policies: [] };
+      }
+      acc[policy.appId].policies.push(policy);
+      return acc;
+    },
+    {} as Record<string, { appName: string; policies: typeof config.accessPolicies }>
+  );
+
+  for (const [appId, group] of Object.entries(appGroups)) {
+    const spinner = ora({
+      text: `Checking Access policies in ${group.appName}...`,
+      discardStdin: false,
+    }).start();
+
+    try {
+      // Fetch current policies
+      const policies = await cfService.getAccessPolicies(config.accountId, appId);
+
+      spinner.stop();
+
+      for (const configPolicy of group.policies) {
+        const policy = policies.find((p) => p.id === configPolicy.policyId);
+
+        if (!policy) {
+          results.push({
+            appId,
+            appName: group.appName,
+            policyId: configPolicy.policyId,
+            policyName: configPolicy.policyName,
+            oldIP: 'unknown',
+            newIP: ipv4,
+            success: false,
+            error: 'Policy not found',
+          });
+          continue;
+        }
+
+        // Get current IP from policy
+        const rawPolicyIp = policy.include.find((inc) => inc.ip)?.ip?.ip;
+        const currentIp = rawPolicyIp || 'unknown';
+
+        const normalizedCurrent = normalizeIp(rawPolicyIp);
+        const normalizedNew = normalizeIp(ipv4);
+
+        // Preserve existing CIDR suffix if present
+        const cidrSuffix =
+          rawPolicyIp && rawPolicyIp.includes('/') ? rawPolicyIp.split('/')[1] : undefined;
+        const newPolicyIp = cidrSuffix ? `${ipv4}/${cidrSuffix}` : ipv4;
+
+        // Check if IP has changed (ignore CIDR differences like /32)
+        if (normalizedCurrent && normalizedNew && normalizedCurrent === normalizedNew) {
+          results.push({
+            appId,
+            appName: group.appName,
+            policyId: policy.id,
+            policyName: policy.name,
+            oldIP: currentIp,
+            newIP: newPolicyIp,
+            success: true,
+          });
+          continue;
+        }
+
+        // Update policy
+        const updateSpinner = ora({
+          text: `Updating ${policy.name}: ${currentIp} → ${ipv4}`,
+          discardStdin: false,
+        }).start();
+
+        try {
+          await cfService.updateAccessPolicy(
+            config.accountId,
+            appId,
+            policy.id,
+            newPolicyIp,
+            policy
+          );
+
+          updateSpinner.succeed(
+            `Updated ${policy.name}: ${chalk.red(currentIp)} → ${chalk.green(newPolicyIp)}`
+          );
+
+          results.push({
+            appId,
+            appName: group.appName,
+            policyId: policy.id,
+            policyName: policy.name,
+            oldIP: currentIp,
+            newIP: newPolicyIp,
+            success: true,
+          });
+        } catch (error) {
+          updateSpinner.fail(`Failed to update ${policy.name}`);
+          results.push({
+            appId,
+            appName: group.appName,
+            policyId: policy.id,
+            policyName: policy.name,
+            oldIP: currentIp,
+            newIP: ipv4,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+    } catch (error) {
+      spinner.fail(`Failed to check policies in ${group.appName}`);
+      console.error(
+        chalk.red(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      );
+    }
+  }
+
+  return results;
+}
+
+/**
  * Starts the DNS update monitoring loop
  */
 export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
@@ -176,22 +331,40 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
 
   // Initial update
   console.log(chalk.gray(`[${new Date().toLocaleTimeString()}] Checking for IP changes...\n`));
-  const initialResults = await updateDNSRecords();
+  const initialDnsResults = await updateDNSRecords();
+  const initialAccessResults = await updateAccessPolicies();
 
-  const updated = initialResults.filter((r) => r.success && r.oldIP !== r.newIP);
-  const unchanged = initialResults.filter((r) => r.success && r.oldIP === r.newIP);
-  const failed = initialResults.filter((r) => !r.success);
+  const dnsUpdated = initialDnsResults.filter((r) => r.success && r.oldIP !== r.newIP);
+  const dnsUnchanged = initialDnsResults.filter((r) => r.success && r.oldIP === r.newIP);
+  const dnsFailed = initialDnsResults.filter((r) => !r.success);
 
-  if (updated.length > 0) {
-    console.log(chalk.green(`\n✓ Updated ${updated.length} record(s)`));
+  const accessUpdated = initialAccessResults.filter((r) => r.success && r.oldIP !== r.newIP);
+  const accessUnchanged = initialAccessResults.filter((r) => r.success && r.oldIP === r.newIP);
+  const accessFailed = initialAccessResults.filter((r) => !r.success);
+
+  if (dnsUpdated.length > 0) {
+    console.log(chalk.green(`\n✓ Updated ${dnsUpdated.length} DNS record(s)`));
   }
-  if (unchanged.length > 0) {
-    console.log(chalk.gray(`  ${unchanged.length} record(s) unchanged`));
+  if (dnsUnchanged.length > 0) {
+    console.log(chalk.gray(`  ${dnsUnchanged.length} DNS record(s) unchanged`));
   }
-  if (failed.length > 0) {
-    console.log(chalk.red(`\n✗ Failed to update ${failed.length} record(s)`));
-    failed.forEach((r) => {
+  if (dnsFailed.length > 0) {
+    console.log(chalk.red(`\n✗ Failed to update ${dnsFailed.length} DNS record(s)`));
+    dnsFailed.forEach((r) => {
       console.log(chalk.red(`  - ${r.recordName}: ${r.error}`));
+    });
+  }
+
+  if (accessUpdated.length > 0) {
+    console.log(chalk.green(`\n✓ Updated ${accessUpdated.length} Access policy/policies`));
+  }
+  if (accessUnchanged.length > 0) {
+    console.log(chalk.gray(`  ${accessUnchanged.length} Access policy/policies unchanged`));
+  }
+  if (accessFailed.length > 0) {
+    console.log(chalk.red(`\n✗ Failed to update ${accessFailed.length} Access policy/policies`));
+    accessFailed.forEach((r) => {
+      console.log(chalk.red(`  - ${r.policyName}: ${r.error}`));
     });
   }
 
@@ -212,22 +385,42 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
       console.log(
         chalk.gray(`\n[${new Date().toLocaleTimeString()}] Checking for IP changes...\n`)
       );
-      const results = await updateDNSRecords();
+      const dnsResults = await updateDNSRecords();
+      const accessResults = await updateAccessPolicies();
 
-      const updated = results.filter((r) => r.success && r.oldIP !== r.newIP);
-      const unchanged = results.filter((r) => r.success && r.oldIP === r.newIP);
-      const failed = results.filter((r) => !r.success);
+      const dnsUpdated = dnsResults.filter((r) => r.success && r.oldIP !== r.newIP);
+      const dnsUnchanged = dnsResults.filter((r) => r.success && r.oldIP === r.newIP);
+      const dnsFailed = dnsResults.filter((r) => !r.success);
 
-      if (updated.length > 0) {
-        console.log(chalk.green(`\n✓ Updated ${updated.length} record(s)`));
+      const accessUpdated = accessResults.filter((r) => r.success && r.oldIP !== r.newIP);
+      const accessUnchanged = accessResults.filter((r) => r.success && r.oldIP === r.newIP);
+      const accessFailed = accessResults.filter((r) => !r.success);
+
+      if (dnsUpdated.length > 0) {
+        console.log(chalk.green(`\n✓ Updated ${dnsUpdated.length} DNS record(s)`));
       }
-      if (unchanged.length > 0) {
-        console.log(chalk.gray(`  ${unchanged.length} record(s) unchanged`));
+      if (dnsUnchanged.length > 0) {
+        console.log(chalk.gray(`  ${dnsUnchanged.length} DNS record(s) unchanged`));
       }
-      if (failed.length > 0) {
-        console.log(chalk.red(`\n✗ Failed to update ${failed.length} record(s)`));
-        failed.forEach((r) => {
+      if (dnsFailed.length > 0) {
+        console.log(chalk.red(`\n✗ Failed to update ${dnsFailed.length} DNS record(s)`));
+        dnsFailed.forEach((r) => {
           console.log(chalk.red(`  - ${r.recordName}: ${r.error}`));
+        });
+      }
+
+      if (accessUpdated.length > 0) {
+        console.log(chalk.green(`\n✓ Updated ${accessUpdated.length} Access policy/policies`));
+      }
+      if (accessUnchanged.length > 0) {
+        console.log(chalk.gray(`  ${accessUnchanged.length} Access policy/policies unchanged`));
+      }
+      if (accessFailed.length > 0) {
+        console.log(
+          chalk.red(`\n✗ Failed to update ${accessFailed.length} Access policy/policies`)
+        );
+        accessFailed.forEach((r) => {
+          console.log(chalk.red(`  - ${r.policyName}: ${r.error}`));
         });
       }
 
@@ -256,17 +449,22 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
 export async function runSingleUpdate(): Promise<void> {
   console.log(chalk.bold.cyan('\n🔄 Checking for IP changes...\n'));
 
-  const results = await updateDNSRecords();
+  const dnsResults = await updateDNSRecords();
+  const accessResults = await updateAccessPolicies();
 
-  const updated = results.filter((r) => r.success && r.oldIP !== r.newIP);
-  const unchanged = results.filter((r) => r.success && r.oldIP === r.newIP);
-  const failed = results.filter((r) => !r.success);
+  const dnsUpdated = dnsResults.filter((r) => r.success && r.oldIP !== r.newIP);
+  const dnsUnchanged = dnsResults.filter((r) => r.success && r.oldIP === r.newIP);
+  const dnsFailed = dnsResults.filter((r) => !r.success);
+
+  const accessUpdated = accessResults.filter((r) => r.success && r.oldIP !== r.newIP);
+  const accessUnchanged = accessResults.filter((r) => r.success && r.oldIP === r.newIP);
+  const accessFailed = accessResults.filter((r) => !r.success);
 
   console.log(chalk.bold.cyan('\n📊 Update Summary:\n'));
 
-  if (updated.length > 0) {
-    console.log(chalk.green(`✓ Updated ${updated.length} record(s):`));
-    updated.forEach((r) => {
+  if (dnsUpdated.length > 0) {
+    console.log(chalk.green(`✓ Updated ${dnsUpdated.length} DNS record(s):`));
+    dnsUpdated.forEach((r) => {
       console.log(
         chalk.green(`  - ${r.recordName}: ${chalk.red(r.oldIP)} → ${chalk.green(r.newIP)}`)
       );
@@ -274,14 +472,36 @@ export async function runSingleUpdate(): Promise<void> {
     console.log();
   }
 
-  if (unchanged.length > 0) {
-    console.log(chalk.gray(`  ${unchanged.length} record(s) unchanged\n`));
+  if (dnsUnchanged.length > 0) {
+    console.log(chalk.gray(`  ${dnsUnchanged.length} DNS record(s) unchanged\n`));
   }
 
-  if (failed.length > 0) {
-    console.log(chalk.red(`✗ Failed to update ${failed.length} record(s):`));
-    failed.forEach((r) => {
+  if (dnsFailed.length > 0) {
+    console.log(chalk.red(`✗ Failed to update ${dnsFailed.length} DNS record(s):`));
+    dnsFailed.forEach((r) => {
       console.log(chalk.red(`  - ${r.recordName}: ${r.error}`));
+    });
+    console.log();
+  }
+
+  if (accessUpdated.length > 0) {
+    console.log(chalk.green(`✓ Updated ${accessUpdated.length} Access policy/policies:`));
+    accessUpdated.forEach((r) => {
+      console.log(
+        chalk.green(`  - ${r.policyName}: ${chalk.red(r.oldIP)} → ${chalk.green(r.newIP)}`)
+      );
+    });
+    console.log();
+  }
+
+  if (accessUnchanged.length > 0) {
+    console.log(chalk.gray(`  ${accessUnchanged.length} Access policy/policies unchanged\n`));
+  }
+
+  if (accessFailed.length > 0) {
+    console.log(chalk.red(`✗ Failed to update ${accessFailed.length} Access policy/policies:`));
+    accessFailed.forEach((r) => {
+      console.log(chalk.red(`  - ${r.policyName}: ${r.error}`));
     });
     console.log();
   }
