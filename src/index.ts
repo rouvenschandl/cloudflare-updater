@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import chalk from 'chalk';
 import { hasConfig } from './config.js';
-import { runSetup, showCurrentConfig } from './setup.js';
+import { runSetup, showCurrentConfig, showMainMenu } from './setup.js';
 import { getPublicIPs } from './ip.js';
 
 /**
@@ -51,9 +51,19 @@ async function main() {
     if (!hasConfig()) {
       console.log(chalk.yellow('⚠  No configuration found. Starting setup...\n'));
       await runSetup();
+
+      // After setup, show config overview and menu if config was saved
+      if (hasConfig()) {
+        console.clear();
+        displayIPHeader(ipv4, ipv6);
+        console.log(chalk.green('✓ Configuration found\n'));
+        await showCurrentConfig();
+        await showMainMenu();
+      }
     } else {
       console.log(chalk.green('✓ Configuration found\n'));
       await showCurrentConfig();
+      await showMainMenu();
     }
   } catch (error) {
     if (error instanceof Error) {

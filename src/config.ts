@@ -8,11 +8,16 @@ const CONFIG_DIR = join(homedir(), '.cloudflare-updater');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.enc');
 const ENCRYPTION_KEY = process.env.CF_ENCRYPTION_KEY || 'default-key-please-change';
 
-interface Config {
+export interface ZoneConfig {
+  zoneId: string;
+  zoneName: string;
+  selectedRecordIds: string[];
+}
+
+export interface Config {
   apiKey: string;
   email?: string;
-  zoneId?: string;
-  zoneName?: string;
+  zones: ZoneConfig[];
 }
 
 /**
