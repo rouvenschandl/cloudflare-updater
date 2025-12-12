@@ -516,16 +516,18 @@ export async function showRecordsList(): Promise<void> {
     }
   }
 
-  console.log(chalk.gray('\n  Press any key to continue...'));
-  await new Promise<void>((resolve) => {
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.once('data', () => {
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-      resolve();
+  if (process.stdin.isTTY) {
+    console.log(chalk.gray('\n  Press any key to continue...'));
+    await new Promise<void>((resolve) => {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.once('data', () => {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        resolve();
+      });
     });
-  });
+  }
 }
 
 /**
@@ -583,6 +585,48 @@ export async function showCurrentConfig(): Promise<void> {
 }
 
 /**
+ * Shows all zone, record, app, and policy IDs for environment variable configuration
+ */
+async function showConfigIds(): Promise<void> {
+  const config = await loadConfig();
+  if (!config) {
+    console.log(chalk.yellow('\n⚠ No configuration found.\n'));
+    return;
+  }
+
+  console.log(chalk.bold.cyan('\n🔑 Configuration IDs for Environment Variables\n'));
+  console.log(chalk.gray('Use these values in CF_ZONES and CF_ACCESS_POLICIES:\n'));
+
+  // Show zones
+  console.log(chalk.bold('CF_ZONES:'));
+  console.log(
+    JSON.stringify(
+      config.zones.map((zone) => ({
+        zoneId: zone.zoneId,
+        zoneName: zone.zoneName,
+        selectedRecordIds: zone.selectedRecordIds,
+      })),
+      null,
+      2
+    )
+  );
+
+  // Show account ID
+  if (config.accountId) {
+    console.log(chalk.bold('\nCF_ACCOUNT_ID:'));
+    console.log(config.accountId);
+  }
+
+  // Show access policies
+  if (config.accessPolicies && config.accessPolicies.length > 0) {
+    console.log(chalk.bold('\nCF_ACCESS_POLICIES:'));
+    console.log(JSON.stringify(config.accessPolicies, null, 2));
+  }
+
+  console.log();
+}
+
+/**
  * Shows the main menu and handles user choices
  */
 export async function showMainMenu(): Promise<void> {
@@ -590,6 +634,7 @@ export async function showMainMenu(): Promise<void> {
     message: 'What would you like to do?',
     choices: [
       { name: '📋 View configured records', value: 'view' },
+      { name: '🔑 Show configuration IDs', value: 'ids' },
       { name: '⚙️  Reconfigure zones', value: 'reconfigure' },
       { name: '🔄 Start IP update monitoring', value: 'start' },
       { name: '🗑️  Delete configuration', value: 'delete' },
@@ -600,6 +645,25 @@ export async function showMainMenu(): Promise<void> {
   switch (choice) {
     case 'view': {
       await showRecordsList();
+      console.clear();
+      await showCurrentConfig();
+      await showMainMenu();
+      break;
+    }
+    case 'ids': {
+      await showConfigIds();
+      if (process.stdin.isTTY) {
+        console.log(chalk.gray('Press any key to continue...'));
+        await new Promise<void>((resolve) => {
+          process.stdin.setRawMode(true);
+          process.stdin.resume();
+          process.stdin.once('data', () => {
+            process.stdin.setRawMode(false);
+            process.stdin.pause();
+            resolve();
+          });
+        });
+      }
       console.clear();
       await showCurrentConfig();
       await showMainMenu();
@@ -675,16 +739,18 @@ export async function showMainMenu(): Promise<void> {
         case 'once': {
           console.clear();
           await runSingleUpdate();
-          console.log(chalk.gray('\nPress any key to continue...'));
-          await new Promise<void>((resolve) => {
-            process.stdin.setRawMode(true);
-            process.stdin.resume();
-            process.stdin.once('data', () => {
-              process.stdin.setRawMode(false);
-              process.stdin.pause();
-              resolve();
+          if (process.stdin.isTTY) {
+            console.log(chalk.gray('\nPress any key to continue...'));
+            await new Promise<void>((resolve) => {
+              process.stdin.setRawMode(true);
+              process.stdin.resume();
+              process.stdin.once('data', () => {
+                process.stdin.setRawMode(false);
+                process.stdin.pause();
+                resolve();
+              });
             });
-          });
+          }
           console.clear();
           await showCurrentConfig();
           await showMainMenu();

@@ -314,7 +314,7 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
     `  ${chalk.bold('Press')} ${chalk.cyan('q')} ${chalk.bold('to stop and return to menu')}\n`
   );
 
-  // Setup keyboard listener with better handling
+  // Setup keyboard listener with better handling (only if stdin is TTY)
   const keyListener = (chunk: Buffer) => {
     const str = chunk.toString('utf8');
 
@@ -325,9 +325,12 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
     }
   };
 
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.on('data', keyListener);
+  const isTTY = process.stdin.isTTY;
+  if (isTTY) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on('data', keyListener);
+  }
 
   // Initial update
   console.log(chalk.gray(`[${new Date().toLocaleTimeString()}] Checking for IP changes...\n`));
@@ -436,9 +439,11 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
   }
 
   // Cleanup
-  process.stdin.removeListener('data', keyListener);
-  process.stdin.setRawMode(false);
-  process.stdin.pause();
+  if (isTTY) {
+    process.stdin.removeListener('data', keyListener);
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+  }
 
   console.log(chalk.yellow('\n✓ Monitoring stopped.\n'));
 }

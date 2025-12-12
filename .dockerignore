@@ -1,0 +1,10 @@
+node_modules
+.git
+.gitignore
+.vscode
+.DS_Store
+dist
+temp
+.tmp
+coverage
+**/*.log

@@ -31,6 +31,69 @@ export interface Config {
 }
 
 /**
+ * Reads configuration from environment variables for non-interactive/docker usage.
+ * Required: CF_API_TOKEN, CF_ZONES (JSON).
+ * Optional: CF_EMAIL, CF_ACCOUNT_ID, CF_ACCESS_POLICIES (JSON), CF_UPDATE_INTERVAL.
+ */
+function loadEnvConfig(): Config | null {
+  const apiKey = process.env.CF_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
+  const email = process.env.CF_EMAIL || process.env.CLOUDFLARE_EMAIL;
+  const accountId = process.env.CF_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
+  const intervalRaw = process.env.CF_UPDATE_INTERVAL || process.env.CLOUDFLARE_UPDATE_INTERVAL;
+
+  const parseJson = <T>(value: string | undefined, field: string): T | null => {
+    if (!value) return null;
+    try {
+      return JSON.parse(value) as T;
+    } catch (error) {
+      console.error(`Invalid JSON in ${field}:`, error);
+      return null;
+    }
+  };
+
+  const zonesEnv = parseJson<ZoneConfig[]>(
+    process.env.CF_ZONES || process.env.CLOUDFLARE_ZONES,
+    'CF_ZONES'
+  );
+  const accessPoliciesEnv = parseJson<AccessPolicyConfig[]>(
+    process.env.CF_ACCESS_POLICIES || process.env.CLOUDFLARE_ACCESS_POLICIES,
+    'CF_ACCESS_POLICIES'
+  );
+
+  if (!apiKey || !zonesEnv || zonesEnv.length === 0) {
+    return null;
+  }
+
+  const normalizedZones: ZoneConfig[] = zonesEnv.map((zone) => ({
+    zoneId: zone.zoneId,
+    zoneName: zone.zoneName,
+    selectedRecordIds:
+      zone.selectedRecordIds || (zone as unknown as { recordIds?: string[] }).recordIds || [],
+  }));
+
+  const normalizedAccessPolicies = accessPoliciesEnv?.map((policy) => ({
+    appId: policy.appId,
+    appName: policy.appName,
+    policyId: policy.policyId,
+    policyName: policy.policyName,
+  }));
+
+  const updateInterval = intervalRaw ? Number.parseInt(intervalRaw, 10) : undefined;
+
+  return {
+    apiKey,
+    email,
+    accountId,
+    zones: normalizedZones,
+    accessPolicies:
+      normalizedAccessPolicies && normalizedAccessPolicies.length > 0
+        ? normalizedAccessPolicies
+        : undefined,
+    updateInterval,
+  };
+}
+
+/**
  * Encrypts a text using AES-256-CBC
  */
 function encrypt(text: string): string {
@@ -78,7 +141,7 @@ export async function saveConfig(config: Config): Promise<void> {
  */
 export async function loadConfig(): Promise<Config | null> {
   if (!existsSync(CONFIG_FILE)) {
-    return null;
+    return loadEnvConfig();
   }
 
   try {
@@ -95,7 +158,7 @@ export async function loadConfig(): Promise<Config | null> {
  * Checks if a configuration exists
  */
 export function hasConfig(): boolean {
-  return existsSync(CONFIG_FILE);
+  return existsSync(CONFIG_FILE) || loadEnvConfig() !== null;
 }
 
 /**
