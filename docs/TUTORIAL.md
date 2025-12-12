@@ -1,15 +1,17 @@
-# Cloudflare Updater Tutorial
+# Cloudflare Updater – Quick Start Guide
 
 This guide shows two ways to configure and run cloudflare-updater:
 
 - Interactive setup (recommended for first-time use)
-- Non-interactive via environment variables (Docker/CI)
+- Non-interactive setup via environment variables (best for Docker/CI)
 
-## 1) Interactive Setup
+---
 
-Run the app locally or in Docker with an interactive terminal. It will guide you through selecting your zones, DNS records and (optionally) Access policies.
+## 1) Interactive Setup (Recommended)
 
-### Local
+Use this once to select your zones, DNS records, and optional Access policies. The app will save an encrypted config so future runs can be headless.
+
+### Option A: Run Locally
 
 ```bash
 pnpm install
@@ -21,10 +23,12 @@ Follow the prompts:
 - Paste your Cloudflare API Token
 - Pick your zone(s)
 - Select A/AAAA records to auto-update
-- Optionally: enter Account ID, choose Access app(s) and policy(ies)
+- Optional: enter Account ID, choose Access app(s) and policy(ies)
 - Choose an update interval
 
-When done, the configuration is saved to `~/.cloudflare-updater/config.enc` (encrypted). Start monitoring:
+The config is saved to `~/.cloudflare-updater/config.enc` (encrypted).
+
+Start monitoring:
 
 ```bash
 pnpm build
@@ -33,7 +37,7 @@ pnpm start
 
 Press `q` to stop monitoring.
 
-### Docker (interactive)
+### Option B: Docker (Interactive)
 
 ```bash
 docker run -it --rm \
@@ -42,11 +46,37 @@ docker run -it --rm \
   ghcr.io/rouvenschandl/cloudflare-updater:latest
 ```
 
-This writes `config.enc` to your host so subsequent runs can be headless.
+This writes `config.enc` to your host so future runs can be headless.
 
-## 2) Non-Interactive via Environment Variables
+### Option C: Linux (Headless with screen)
 
-Skip prompts by providing full config via env vars. This is ideal for servers and CI.
+Keep it running after you disconnect using `screen`:
+
+```bash
+# Prepare once
+corepack enable
+pnpm install --frozen-lockfile
+pnpm dev           # creates ~/.cloudflare-updater/config.enc
+pnpm build
+
+# Start a screen session and run the updater
+screen -S cloudflare-updater
+pnpm start         # press q to stop
+# Detach: Ctrl+A, then D
+
+# Reattach later
+screen -r cloudflare-updater
+
+# Stop cleanly
+# - In the app: q or Ctrl+C
+# - Then type `exit` to close the screen shell
+```
+
+---
+
+## 2) Non-Interactive Setup (Environment Variables)
+
+Skip prompts by providing full config via environment variables. Ideal for servers and CI.
 
 Required:
 
@@ -57,10 +87,10 @@ Optional:
 
 - `CF_ACCOUNT_ID` – Needed if using Access policies
 - `CF_ACCESS_POLICIES` – JSON array of app/policy IDs
-- `CF_UPDATE_INTERVAL` – Minutes between checks (default 5)
-- `CF_EMAIL` – Only if your token requires email
+- `CF_UPDATE_INTERVAL` – Minutes between checks (default: 5)
+- `CF_EMAIL` – Only if your token requires an email
 
-Example:
+Example (Docker):
 
 ```bash
 docker run -d --name cloudflare-updater \
@@ -74,7 +104,7 @@ docker run -d --name cloudflare-updater \
 Notes:
 
 - `recordIds` is accepted as a synonym for `selectedRecordIds` in `CF_ZONES`.
-- If you previously saved `config.enc`, you can mount it instead of envs:
+- If you already have `config.enc`, you can mount it instead of using env vars:
 
 ```bash
 docker run -d --name cloudflare-updater \
@@ -83,19 +113,34 @@ docker run -d --name cloudflare-updater \
   ghcr.io/rouvenschandl/cloudflare-updater:latest
 ```
 
-## Getting Zone, Record, App and Policy IDs
+---
 
-Use the app once interactively to view all IDs:
+## Getting IDs (Zone, Record, App, Policy)
 
-- From the main menu choose "Show configuration IDs" to print ready-to-copy JSON snippets for `CF_ZONES`, `CF_ACCOUNT_ID`, `CF_ACCESS_POLICIES`.
-- Alternatively, the Cloudflare Dashboard/API shows zone and record IDs.
+Use the app interactively once:
+
+- From the main menu, choose “Show configuration IDs” to print ready-to-copy JSON for `CF_ZONES`, `CF_ACCOUNT_ID`, and `CF_ACCESS_POLICIES`.
+- You can also find zone and record IDs in the Cloudflare Dashboard/API.
+
+---
 
 ## CI / GHCR
 
-Images are built and pushed to GHCR with tags:
+Docker images are pushed to GHCR with tags:
 
 - Commit SHA
-- `latest` on default branch
-- `pr-<number>` for PRs
+- `latest` (default branch)
+- `pr-<number>` (pull requests)
 
-You can pull and run the published image with either the env-based config or a mounted `config.enc`.
+You can run the published image using either the env-based config or a mounted `config.enc`.
+
+---
+
+## Mode Overview
+
+Choose what fits your setup:
+
+- Interactive locally (best for first setup)
+- Docker interactive (writes config to host; then go headless)
+- Docker headless via environment variables
+- Linux bare-metal headless with `screen`
