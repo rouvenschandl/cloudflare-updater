@@ -3,7 +3,14 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Cloudflare updater automatically updates your DNS records and access rules based on your changing IP address",
+  "main": "dist/index.js",
+  "bin": {
+    "cloudflare-updater": "./dist/index.js"
+  },
   "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
     "lint": "eslint . --ext .js,.ts,.tsx",
     "lint:fix": "eslint . --ext .js,.ts,.tsx --fix",
     "format": "prettier --write \"**/*.{js,ts,tsx,json,md,yml,yaml}\"",
@@ -31,6 +38,7 @@
     "@commitlint/cli": "^20.2.0",
     "@commitlint/config-conventional": "^20.2.0",
     "@eslint/js": "^9.39.1",
+    "@types/node": "^25.0.1",
     "commitizen": "^4.3.1",
     "cz-conventional-changelog": "^3.3.0",
     "eslint": "^9.39.1",
@@ -40,6 +48,16 @@
     "lefthook": "^2.0.11",
     "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.49.0"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.0.2",
+    "chalk": "^5.6.2",
+    "cloudflare": "^5.2.0",
+    "dotenv": "^17.2.3",
+    "ora": "^9.0.0",
+    "public-ip": "^8.0.0"
   }
 }
