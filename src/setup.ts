@@ -1,8 +1,9 @@
-import { select, confirm, password, checkbox } from '@inquirer/prompts';
+import { select, confirm, password, checkbox, input } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
 import { CloudflareService, type Zone } from './cloudflare.js';
 import { saveConfig, loadConfig, deleteConfig, hasConfig } from './config.js';
+import { startUpdateLoop, runSingleUpdate } from './updater.js';
 
 interface ZoneConfig {
   zoneId: string;
@@ -164,7 +165,22 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
     // Calculate total records
     const totalRecords = zones.reduce((sum, zone) => sum + zone.selectedRecordIds.length, 0);
 
-    // 4. Save configuration
+    // 4. Ask for update interval
+    const intervalInput = await input({
+      message: 'Update interval in minutes (default: 5):',
+      default: '5',
+      validate: (value) => {
+        const num = parseInt(value, 10);
+        if (isNaN(num) || num < 1) {
+          return 'Please enter a valid number greater than 0';
+        }
+        return true;
+      },
+    });
+
+    const updateInterval = parseInt(intervalInput, 10);
+
+    // 5. Save configuration
     const shouldSave = await confirm({
       message: `Do you want to save this configuration?\n  Zones: ${chalk.cyan(zones.length.toString())}\n  Total Records: ${chalk.cyan(totalRecords.toString())}`,
       default: true,
@@ -174,6 +190,7 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
       await saveConfig({
         apiKey,
         zones,
+        updateInterval,
       });
 
       console.log(chalk.green('\n✓ Configuration saved successfully!\n'));
@@ -275,10 +292,12 @@ export async function showCurrentConfig(): Promise<void> {
   }
 
   const totalRecords = config.zones.reduce((sum, zone) => sum + zone.selectedRecordIds.length, 0);
+  const updateInterval = config.updateInterval || 5;
 
   console.log(chalk.bold.cyan('\n⚙️  Current Configuration:\n'));
   console.log(`  ${chalk.bold('Zones:')}    ${config.zones.length}`);
   console.log(`  ${chalk.bold('Records:')} ${totalRecords}`);
+  console.log(`  ${chalk.bold('Update Interval:')} ${updateInterval} minute(s)`);
   console.log(`  ${chalk.bold('API Key:')} ${chalk.gray('*'.repeat(20))}`);
 
   console.log(chalk.bold.cyan('\n  Configured Zones:\n'));
@@ -358,8 +377,82 @@ export async function showMainMenu(): Promise<void> {
       break;
     }
     case 'start': {
-      console.log(chalk.yellow('\n⚠ IP update monitoring not yet implemented.\n'));
-      await showMainMenu();
+      console.clear();
+
+      const updateChoice = await select({
+        message: 'DNS Update Options:',
+        choices: [
+          { name: '🔄 Start automatic monitoring', value: 'auto' },
+          { name: '⚡ Run single update check', value: 'once' },
+          { name: '⚙️  Change update interval', value: 'interval' },
+          { name: '← Back to main menu', value: 'back' },
+        ],
+      });
+
+      switch (updateChoice) {
+        case 'auto': {
+          console.clear();
+          await startUpdateLoop();
+          // After monitoring stops, return to menu
+          console.clear();
+          await showCurrentConfig();
+          await showMainMenu();
+          break;
+        }
+        case 'once': {
+          console.clear();
+          await runSingleUpdate();
+          console.log(chalk.gray('\nPress any key to continue...'));
+          await new Promise<void>((resolve) => {
+            process.stdin.setRawMode(true);
+            process.stdin.resume();
+            process.stdin.once('data', () => {
+              process.stdin.setRawMode(false);
+              process.stdin.pause();
+              resolve();
+            });
+          });
+          console.clear();
+          await showCurrentConfig();
+          await showMainMenu();
+          break;
+        }
+        case 'interval': {
+          const config = await loadConfig();
+          if (!config) {
+            console.log(chalk.red('\n✗ No configuration found.\n'));
+            await showMainMenu();
+            break;
+          }
+
+          const currentInterval = config.updateInterval || 5;
+          const intervalInput = await input({
+            message: `Update interval in minutes (current: ${currentInterval}):`,
+            default: currentInterval.toString(),
+            validate: (value) => {
+              const num = parseInt(value, 10);
+              if (isNaN(num) || num < 1) {
+                return 'Please enter a valid number greater than 0';
+              }
+              return true;
+            },
+          });
+
+          const newInterval = parseInt(intervalInput, 10);
+          config.updateInterval = newInterval;
+          await saveConfig(config);
+
+          console.log(chalk.green(`\n✓ Update interval changed to ${newInterval} minute(s)\n`));
+          await showMainMenu();
+          break;
+        }
+        case 'back': {
+          console.clear();
+          await showCurrentConfig();
+          await showMainMenu();
+          break;
+        }
+      }
       break;
     }
     case 'delete': {

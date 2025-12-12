@@ -18,6 +18,7 @@ export interface Config {
   apiKey: string;
   email?: string;
   zones: ZoneConfig[];
+  updateInterval?: number; // in minutes, default: 5
 }
 
 /**

@@ -62,6 +62,15 @@ async function main() {
       }
     } else {
       console.log(chalk.green('✓ Configuration found\n'));
+
+      // Auto-start monitoring mode
+      const { startUpdateLoop } = await import('./updater.js');
+      await startUpdateLoop();
+
+      // After monitoring stops, show menu
+      console.clear();
+      displayIPHeader(ipv4, ipv6);
+      console.log(chalk.green('✓ Configuration found\n'));
       await showCurrentConfig();
       await showMainMenu();
     }
