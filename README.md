@@ -1,5 +1,7 @@
 # Cloudflare Updater
 
+![GIF](docs/media/Cloudflare-Updater.gif)
+
 Keeps your Cloudflare DNS A/AAAA records and optional Zero Trust Access policies in sync with your changing public IP.
 
 - Automatic monitoring loop with clear terminal output
