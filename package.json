@@ -1,0 +1,45 @@
+{
+  "name": "cloudflare-updater",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cloudflare updater automatically updates your DNS records and access rules based on your changing IP address",
+  "scripts": {
+    "lint": "eslint . --ext .js,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{js,ts,tsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{js,ts,tsx,json,md,yml,yaml}\"",
+    "commit": "cz",
+    "prepare": "lefthook install",
+    "knip": "knip",
+    "knip:production": "knip --production"
+  },
+  "keywords": [
+    "cloudflare",
+    "dns",
+    "updater",
+    "dynamic-ip"
+  ],
+  "author": "rouvenschandl",
+  "license": "ISC",
+  "packageManager": "pnpm@10.22.0",
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.2.0",
+    "@commitlint/config-conventional": "^20.2.0",
+    "@eslint/js": "^9.39.1",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "knip": "^5.73.4",
+    "lefthook": "^2.0.11",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
+    "typescript-eslint": "^8.49.0"
+  }
+}
