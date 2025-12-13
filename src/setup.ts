@@ -329,7 +329,7 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
       }
     }
 
-    // 5. Ask for update interval
+    // 6. Ask for update interval
     const intervalInput = await input({
       message: 'Update interval in minutes (default: 5):',
       default: '5',
@@ -344,7 +344,52 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
 
     const updateInterval = parseInt(intervalInput, 10);
 
-    // 6. Save configuration
+    // 7. Ask for optional webhook notifications
+    const configureNotifications = await confirm({
+      message: 'Do you want to configure Discord/Slack webhook notifications?',
+      default: false,
+    });
+
+    let discordWebhookUrl: string | undefined;
+    let slackWebhookUrl: string | undefined;
+
+    if (configureNotifications) {
+      const addDiscord = await confirm({
+        message: 'Add Discord webhook?',
+        default: false,
+      });
+
+      if (addDiscord) {
+        discordWebhookUrl = await input({
+          message: 'Discord webhook URL:',
+          validate: (value) => {
+            if (value.trim().length === 0) {
+              return 'Webhook URL must not be empty';
+            }
+            return true;
+          },
+        });
+      }
+
+      const addSlack = await confirm({
+        message: 'Add Slack webhook?',
+        default: false,
+      });
+
+      if (addSlack) {
+        slackWebhookUrl = await input({
+          message: 'Slack webhook URL:',
+          validate: (value) => {
+            if (value.trim().length === 0) {
+              return 'Webhook URL must not be empty';
+            }
+            return true;
+          },
+        });
+      }
+    }
+
+    // 8. Save configuration
     const totalAccessPolicies = accessPolicies.length;
     let confirmMessage = `Do you want to save this configuration?\n  Zones: ${chalk.cyan(zones.length.toString())}\n  DNS Records: ${chalk.cyan(totalRecords.toString())}`;
     if (totalAccessPolicies > 0) {
@@ -363,6 +408,8 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
         zones,
         accessPolicies: accessPolicies.length > 0 ? accessPolicies : undefined,
         updateInterval,
+        discordWebhookUrl,
+        slackWebhookUrl,
       });
 
       console.log(chalk.green('\n✓ Configuration saved successfully!\n'));
@@ -393,6 +440,16 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
             `  ${chalk.cyan('●')} ${chalk.bold(group.appName)} - ${group.policies.length} policy/policies`
           );
         });
+      }
+
+      if (discordWebhookUrl || slackWebhookUrl) {
+        console.log(chalk.bold.cyan('\n🔔 Notifications Configured:\n'));
+        if (discordWebhookUrl) {
+          console.log(`  ${chalk.cyan('●')} Discord webhook`);
+        }
+        if (slackWebhookUrl) {
+          console.log(`  ${chalk.cyan('●')} Slack webhook`);
+        }
       }
 
       console.log();

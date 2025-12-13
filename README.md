@@ -27,11 +27,14 @@ For a complete guide (interactive setup, IDs, Access policies, CI), see [docs/TU
 - CF_ACCESS_POLICIES: JSON array of app/policy IDs (optional)
 - CF_UPDATE_INTERVAL: Minutes between checks (optional, default 5)
 - CF_EMAIL: Email if your token requires it (optional)
+- DISCORD_WEBHOOK_URL: Discord webhook for notifications (optional)
+- SLACK_WEBHOOK_URL: Slack webhook for notifications (optional)
 
 Tips:
 
 - `recordIds` is accepted as a synonym for `selectedRecordIds` in CF_ZONES
 - To manage config via file instead, use interactive setup once and mount `~/.cloudflare-updater/config.enc` in Docker
+- See [docs/TUTORIAL.md](docs/TUTORIAL.md) for setting up Discord/Slack notifications
 
 ## Contributing
 

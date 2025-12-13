@@ -144,3 +144,56 @@ Choose what fits your setup:
 - Docker interactive (writes config to host; then go headless)
 - Docker headless via environment variables
 - Linux bare-metal headless with `screen`
+
+---
+
+## Notifications (Discord & Slack)
+
+Get instant alerts when your IP updates or fails. Set up optional Discord or Slack webhooks.
+
+### Discord Webhook
+
+1. Create a Discord server webhook:
+   - Right-click channel → Edit channel → Integrations → Webhooks → New Webhook
+   - Copy the Webhook URL
+
+2. Set the environment variable:
+
+   ```bash
+   export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+   ```
+
+3. Restart the app. Notifications will now post to Discord on every IP change or error.
+
+### Slack Webhook
+
+1. Create a Slack webhook:
+   - Go to https://api.slack.com/apps → Create New App → From scratch
+   - Enable Incoming Webhooks
+   - Add New Webhook to Workspace and copy the URL
+
+2. Set the environment variable:
+
+   ```bash
+   export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."
+   ```
+
+3. Restart the app. Notifications will now post to Slack on every IP change or error.
+
+### Docker with Notifications
+
+```bash
+docker run -d --name cloudflare-updater \
+  -e CF_API_TOKEN="..." \
+  -e CF_ZONES='[...]' \
+  -e DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..." \
+  -e SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..." \
+  ghcr.io/rouvenschandl/cloudflare-updater:latest
+```
+
+Both Discord and Slack are optional—use whichever fits your workflow. Messages include:
+
+- Zone/record or app/policy name
+- Old and new IP
+- Timestamp
+- Error details (if update failed)

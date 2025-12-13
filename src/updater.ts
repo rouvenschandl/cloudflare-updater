@@ -3,6 +3,7 @@ import ora from 'ora';
 import { loadConfig } from './config.js';
 import { CloudflareService } from './cloudflare.js';
 import { getPublicIPs } from './ip.js';
+import { sendNotification } from './notifications.js';
 
 interface UpdateResult {
   zoneId: string;
@@ -124,7 +125,7 @@ async function updateDNSRecords(): Promise<UpdateResult[]> {
             `Updated ${record.name} (${record.type}): ${chalk.red(currentIP)} → ${chalk.green(newIP)}`
           );
 
-          results.push({
+          const result = {
             zoneId: zone.zoneId,
             zoneName: zone.zoneName,
             recordId: record.id,
@@ -132,10 +133,27 @@ async function updateDNSRecords(): Promise<UpdateResult[]> {
             oldIP: currentIP,
             newIP,
             success: true,
-          });
+          };
+
+          results.push(result);
+
+          // Send notification
+          await sendNotification(
+            {
+              type: 'dns_update',
+              zoneName: zone.zoneName,
+              recordName: record.name,
+              oldIP: currentIP,
+              newIP,
+              timestamp: new Date().toISOString(),
+            },
+            config
+          );
         } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
           updateSpinner.fail(`Failed to update ${record.name}`);
-          results.push({
+
+          const result = {
             zoneId: zone.zoneId,
             zoneName: zone.zoneName,
             recordId: record.id,
@@ -143,8 +161,24 @@ async function updateDNSRecords(): Promise<UpdateResult[]> {
             oldIP: currentIP,
             newIP,
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
+            error: errorMsg,
+          };
+
+          results.push(result);
+
+          // Send error notification
+          await sendNotification(
+            {
+              type: 'dns_failed',
+              zoneName: zone.zoneName,
+              recordName: record.name,
+              oldIP: currentIP,
+              newIP,
+              error: errorMsg,
+              timestamp: new Date().toISOString(),
+            },
+            config
+          );
         }
       }
     } catch (error) {
@@ -262,7 +296,7 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
             `Updated ${policy.name}: ${chalk.red(currentIp)} → ${chalk.green(newPolicyIp)}`
           );
 
-          results.push({
+          const result = {
             appId,
             appName: group.appName,
             policyId: policy.id,
@@ -270,10 +304,27 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
             oldIP: currentIp,
             newIP: newPolicyIp,
             success: true,
-          });
+          };
+
+          results.push(result);
+
+          // Send notification
+          await sendNotification(
+            {
+              type: 'access_update',
+              appName: group.appName,
+              policyName: policy.name,
+              oldIP: currentIp,
+              newIP: newPolicyIp,
+              timestamp: new Date().toISOString(),
+            },
+            config
+          );
         } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
           updateSpinner.fail(`Failed to update ${policy.name}`);
-          results.push({
+
+          const result = {
             appId,
             appName: group.appName,
             policyId: policy.id,
@@ -281,8 +332,24 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
             oldIP: currentIp,
             newIP: ipv4,
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
+            error: errorMsg,
+          };
+
+          results.push(result);
+
+          // Send error notification
+          await sendNotification(
+            {
+              type: 'access_failed',
+              appName: group.appName,
+              policyName: policy.name,
+              oldIP: currentIp,
+              newIP: ipv4,
+              error: errorMsg,
+              timestamp: new Date().toISOString(),
+            },
+            config
+          );
         }
       }
     } catch (error) {

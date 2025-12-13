@@ -28,6 +28,8 @@ export interface Config {
   zones: ZoneConfig[];
   accessPolicies?: AccessPolicyConfig[];
   updateInterval?: number; // in minutes, default: 5
+  discordWebhookUrl?: string;
+  slackWebhookUrl?: string;
 }
 
 /**
@@ -79,6 +81,8 @@ function loadEnvConfig(): Config | null {
   }));
 
   const updateInterval = intervalRaw ? Number.parseInt(intervalRaw, 10) : undefined;
+  const discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL || process.env.CF_DISCORD_WEBHOOK;
+  const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL || process.env.CF_SLACK_WEBHOOK;
 
   return {
     apiKey,
@@ -90,6 +94,8 @@ function loadEnvConfig(): Config | null {
         ? normalizedAccessPolicies
         : undefined,
     updateInterval,
+    discordWebhookUrl,
+    slackWebhookUrl,
   };
 }
 
