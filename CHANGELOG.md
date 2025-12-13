@@ -1,3 +1,9 @@
+# [1.1.0](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.0.0...v1.1.0) (2025-12-13)
+
+### Features
+
+- add Discord and Slack webhook notifications with TUI configuration ([1759ea9](https://github.com/rouvenschandl/cloudflare-updater/commit/1759ea91b2b91dd0e770aba556784ab0541587b8))
+
 # 1.0.0 (2025-12-12)
 
 ### Bug Fixes
