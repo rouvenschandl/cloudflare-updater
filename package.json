@@ -35,7 +35,7 @@
   ],
   "author": "rouvenschandl",
   "license": "ISC",
-  "packageManager": "bun@1.3.10",
+  "packageManager": "bun@1.3.11",
   "config": {
     "commitizen": {
       "path": "cz-conventional-changelog"
