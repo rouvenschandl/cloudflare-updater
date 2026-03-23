@@ -12,7 +12,7 @@ Thank you for your interest in contributing! This document outlines the process 
    ```
 3. Install dependencies:
    ```bash
-   pnpm install
+   bun install
    ```
 4. Create a new branch for your changes:
    ```bash
@@ -25,13 +25,13 @@ Thank you for your interest in contributing! This document outlines the process 
 
 ```bash
 # Run in development mode
-pnpm dev
+bun run dev
 
 # Build the project
-pnpm build
+bun run build
 
 # Run the built version
-pnpm start
+bun run start
 ```
 
 ### Code Quality
@@ -40,16 +40,16 @@ Before submitting your changes, ensure they pass our quality checks:
 
 ```bash
 # Lint your code
-pnpm lint
+bun run lint
 
 # Fix linting issues automatically
-pnpm lint:fix
+bun run lint:fix
 
 # Check formatting
-pnpm format:check
+bun run format:check
 
 # Format code
-pnpm format
+bun run format
 ```
 
 ### Testing
@@ -106,7 +106,7 @@ refactor: extract config loading into separate function
 This project includes Commitizen for guided commit messages:
 
 ```bash
-pnpm commit
+bun run commit
 ```
 
 This will prompt you through creating a properly formatted commit message.

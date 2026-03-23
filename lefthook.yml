@@ -2,9 +2,9 @@ pre-commit:
   parallel: true
   commands:
     lint-staged:
-      run: npx lint-staged
+      run: bunx lint-staged
 
 commit-msg:
   commands:
     commitlint:
-      run: npx commitlint --edit {1}
+      run: bunx commitlint --edit {1}

@@ -19,7 +19,9 @@
     "prepare": "lefthook install",
     "knip": "knip",
     "knip:production": "knip --production",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "docker:build": "docker build -t cloudflare-updater .",
+    "docker:start": "docker run --rm --env-file .env.docker cloudflare-updater"
   },
   "keywords": [
     "cloudflare",
@@ -29,7 +31,7 @@
   ],
   "author": "rouvenschandl",
   "license": "ISC",
-  "packageManager": "pnpm@10.22.0",
+  "packageManager": "bun@1.3.10",
   "config": {
     "commitizen": {
       "path": "cz-conventional-changelog"

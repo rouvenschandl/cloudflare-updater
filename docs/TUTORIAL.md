@@ -14,8 +14,8 @@ Use this once to select your zones, DNS records, and optional Access policies. T
 ### Option A: Run Locally
 
 ```bash
-pnpm install
-pnpm dev
+bun install
+bun run dev
 ```
 
 Follow the prompts:
@@ -31,8 +31,8 @@ The config is saved to `~/.cloudflare-updater/config.enc` (encrypted).
 Start monitoring:
 
 ```bash
-pnpm build
-pnpm start
+bun run build
+bun run start
 ```
 
 Press `q` to stop monitoring.
@@ -54,14 +54,13 @@ Keep it running after you disconnect using `screen`:
 
 ```bash
 # Prepare once
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev           # creates ~/.cloudflare-updater/config.enc
-pnpm build
+bun install --frozen-lockfile
+bun run dev        # creates ~/.cloudflare-updater/config.enc
+bun run build
 
 # Start a screen session and run the updater
 screen -S cloudflare-updater
-pnpm start         # press q to stop
+bun run start      # press q to stop
 # Detach: Ctrl+A, then D
 
 # Reattach later

@@ -12,7 +12,7 @@ export default [
       'coverage/**',
       '*.min.js',
       '*.min.css',
-      'pnpm-lock.yaml',
+      'bun.lock',
       'package-lock.json',
     ],
   },
