@@ -15,7 +15,7 @@ RUN bun run build
 RUN bun install --frozen-lockfile --production --ignore-scripts
 
 # Runtime image
-FROM oven/bun:1.3.10-alpine AS runner
+FROM oven/bun:1.3.11-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
