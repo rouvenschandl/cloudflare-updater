@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.1.0...v1.1.1) (2026-03-23)
+
+
+### Bug Fixes
+
+* ci docker push permissions ([6db77ce](https://github.com/rouvenschandl/cloudflare-updater/commit/6db77ce36c7b34b0517f9df0bd0286ce1ab6388e))
+
 # [1.1.0](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.0.0...v1.1.0) (2025-12-13)
 
 ### Features
