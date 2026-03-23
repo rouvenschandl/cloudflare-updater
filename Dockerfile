@@ -1,5 +1,5 @@
 # Multi-stage build for cloudflare-updater CLI
-FROM oven/bun:1.3.10-alpine AS builder
+FROM oven/bun:1.3.11-alpine AS builder
 WORKDIR /app
 ENV NODE_ENV=production
 
