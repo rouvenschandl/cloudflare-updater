@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.1.1...v1.1.2) (2026-03-23)
+
+
+### Bug Fixes
+
+* disable Docker image push in CI workflow ([c2651b3](https://github.com/rouvenschandl/cloudflare-updater/commit/c2651b3ccd6215af46e8de1efcfa9467b44bc6fe))
+
 ## [1.1.1](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.1.0...v1.1.1) (2026-03-23)
 
 
