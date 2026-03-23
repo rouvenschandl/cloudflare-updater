@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-updater",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Cloudflare updater automatically updates your DNS records and access rules based on your changing IP address",
   "main": "dist/index.js",
@@ -36,33 +36,33 @@
     }
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.2.0",
-    "@commitlint/config-conventional": "^20.2.0",
-    "@eslint/js": "^9.39.1",
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "@eslint/js": "^10.0.1",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^12.0.2",
-    "@types/node": "^25.0.1",
+    "@semantic-release/github": "^12.0.6",
+    "@types/node": "^25.5.0",
     "commitizen": "^4.3.1",
     "cz-conventional-changelog": "^3.3.0",
-    "eslint": "^9.39.1",
+    "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.4",
-    "knip": "^5.73.4",
-    "lefthook": "^2.0.11",
-    "lint-staged": "^16.2.7",
-    "prettier": "^3.7.4",
-    "semantic-release": "^25.0.2",
+    "eslint-plugin-prettier": "^5.5.5",
+    "knip": "^6.0.2",
+    "lefthook": "^2.1.4",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1",
+    "semantic-release": "^25.0.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.49.0"
+    "typescript-eslint": "^8.57.1"
   },
   "dependencies": {
-    "@inquirer/prompts": "^8.0.2",
+    "@inquirer/prompts": "^8.3.2",
     "chalk": "^5.6.2",
     "cloudflare": "^5.2.0",
-    "dotenv": "^17.2.3",
-    "ora": "^9.0.0",
+    "dotenv": "^17.3.1",
+    "ora": "^9.3.0",
     "public-ip": "^8.0.0"
   }
 }
