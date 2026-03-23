@@ -5,8 +5,6 @@ on:
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
   packages: write
 
 env:
@@ -14,7 +12,20 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  generate-token:
+    runs-on: ubuntu-latest
+    outputs:
+      token: ${{ steps.generate_token.outputs.token }}
+    steps:
+      - name: Generate token
+        id: generate_token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.BOT_APP_ID }}
+          private_key: ${{ secrets.BOT_PRIVATE_KEY }}
+
   release:
+    needs: generate-token
     runs-on: ubuntu-latest
     outputs:
       new_release_published: ${{ steps.semantic.outputs.new_release_published }}
@@ -46,11 +57,11 @@ jobs:
       - name: Semantic Release
         id: semantic
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ needs.generate-token.outputs.token }}
         run: npx semantic-release
 
   docker:
-    needs: release
+    needs: [release, generate-token]
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -66,8 +77,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: x-access-token
+          password: ${{ needs.generate-token.outputs.token }}
 
       - name: Docker metadata
         id: meta
