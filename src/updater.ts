@@ -5,6 +5,33 @@ import { loadConfig } from './config.js';
 import { getPublicIPs } from './ip.js';
 import { sendNotification } from './notifications.js';
 
+interface CloudflareServiceLike {
+  getDNSRecords: CloudflareService['getDNSRecords'];
+  updateDNSRecord: CloudflareService['updateDNSRecord'];
+  getAccessPolicies: CloudflareService['getAccessPolicies'];
+  updateAccessPolicy: CloudflareService['updateAccessPolicy'];
+}
+
+interface UpdaterDeps {
+  loadConfig: typeof loadConfig;
+  getPublicIPs: typeof getPublicIPs;
+  sendNotification: typeof sendNotification;
+  createCloudflareService: (apiKey: string) => CloudflareServiceLike;
+  createSpinner: typeof ora;
+}
+
+const defaultDeps: UpdaterDeps = {
+  loadConfig,
+  getPublicIPs,
+  sendNotification,
+  createCloudflareService: (apiKey: string) => new CloudflareService(apiKey),
+  createSpinner: ora,
+};
+
+export const __testOnly = {
+  defaultDeps,
+};
+
 interface UpdateResult {
   zoneId: string;
   zoneName: string;
@@ -36,21 +63,23 @@ function normalizeIp(ip?: string): string | undefined {
 /**
  * Checks and updates DNS records if IP has changed
  */
-async function updateDNSRecords(): Promise<UpdateResult[]> {
-  const config = await loadConfig();
+async function updateDNSRecords(deps: UpdaterDeps = defaultDeps): Promise<UpdateResult[]> {
+  const config = await deps.loadConfig();
   if (!config) {
     throw new Error('No configuration found');
   }
 
-  const { ipv4, ipv6 } = await getPublicIPs();
-  const cfService = new CloudflareService(config.apiKey);
+  const { ipv4, ipv6 } = await deps.getPublicIPs();
+  const cfService = deps.createCloudflareService(config.apiKey);
   const results: UpdateResult[] = [];
 
   for (const zone of config.zones) {
-    const spinner = ora({
-      text: `Checking records in ${zone.zoneName}...`,
-      discardStdin: false,
-    }).start();
+    const spinner = deps
+      .createSpinner({
+        text: `Checking records in ${zone.zoneName}...`,
+        discardStdin: false,
+      })
+      .start();
 
     try {
       // Fetch current DNS records
@@ -105,10 +134,12 @@ async function updateDNSRecords(): Promise<UpdateResult[]> {
         }
 
         // Update DNS record
-        const updateSpinner = ora({
-          text: `Updating ${record.name} (${record.type}): ${currentIP} → ${newIP}`,
-          discardStdin: false,
-        }).start();
+        const updateSpinner = deps
+          .createSpinner({
+            text: `Updating ${record.name} (${record.type}): ${currentIP} → ${newIP}`,
+            discardStdin: false,
+          })
+          .start();
 
         try {
           await cfService.updateDNSRecord(
@@ -138,7 +169,7 @@ async function updateDNSRecords(): Promise<UpdateResult[]> {
           results.push(result);
 
           // Send notification
-          await sendNotification(
+          await deps.sendNotification(
             {
               type: 'dns_update',
               zoneName: zone.zoneName,
@@ -167,7 +198,7 @@ async function updateDNSRecords(): Promise<UpdateResult[]> {
           results.push(result);
 
           // Send error notification
-          await sendNotification(
+          await deps.sendNotification(
             {
               type: 'dns_failed',
               zoneName: zone.zoneName,
@@ -195,19 +226,21 @@ async function updateDNSRecords(): Promise<UpdateResult[]> {
 /**
  * Checks and updates Access policies if IP has changed
  */
-async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
-  const config = await loadConfig();
+async function updateAccessPolicies(
+  deps: UpdaterDeps = defaultDeps
+): Promise<AccessUpdateResult[]> {
+  const config = await deps.loadConfig();
   if (!config || !config.accessPolicies || !config.accountId) {
     return [];
   }
 
-  const { ipv4 } = await getPublicIPs();
+  const { ipv4 } = await deps.getPublicIPs();
   if (!ipv4) {
     console.log(chalk.yellow('\n⚠ No IPv4 address available for Access policy updates\n'));
     return [];
   }
 
-  const cfService = new CloudflareService(config.apiKey);
+  const cfService = deps.createCloudflareService(config.apiKey);
   const results: AccessUpdateResult[] = [];
 
   // Group policies by app
@@ -223,10 +256,12 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
   );
 
   for (const [appId, group] of Object.entries(appGroups)) {
-    const spinner = ora({
-      text: `Checking Access policies in ${group.appName}...`,
-      discardStdin: false,
-    }).start();
+    const spinner = deps
+      .createSpinner({
+        text: `Checking Access policies in ${group.appName}...`,
+        discardStdin: false,
+      })
+      .start();
 
     try {
       // Fetch current policies
@@ -277,10 +312,12 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
         }
 
         // Update policy
-        const updateSpinner = ora({
-          text: `Updating ${policy.name}: ${currentIp} → ${ipv4}`,
-          discardStdin: false,
-        }).start();
+        const updateSpinner = deps
+          .createSpinner({
+            text: `Updating ${policy.name}: ${currentIp} → ${ipv4}`,
+            discardStdin: false,
+          })
+          .start();
 
         try {
           await cfService.updateAccessPolicy(
@@ -308,7 +345,7 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
           results.push(result);
 
           // Send notification
-          await sendNotification(
+          await deps.sendNotification(
             {
               type: 'access_update',
               appName: group.appName,
@@ -337,7 +374,7 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
           results.push(result);
 
           // Send error notification
-          await sendNotification(
+          await deps.sendNotification(
             {
               type: 'access_failed',
               appName: group.appName,
@@ -365,8 +402,11 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
 /**
  * Starts the DNS update monitoring loop
  */
-export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
-  const config = await loadConfig();
+export async function startUpdateLoop(
+  intervalMinutes?: number,
+  deps: UpdaterDeps = defaultDeps
+): Promise<void> {
+  const config = await deps.loadConfig();
   if (!config) {
     throw new Error('No configuration found');
   }
@@ -400,8 +440,8 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
 
   // Initial update
   console.log(chalk.gray(`[${new Date().toLocaleTimeString()}] Checking for IP changes...\n`));
-  const initialDnsResults = await updateDNSRecords();
-  const initialAccessResults = await updateAccessPolicies();
+  const initialDnsResults = await updateDNSRecords(deps);
+  const initialAccessResults = await updateAccessPolicies(deps);
 
   const dnsUpdated = initialDnsResults.filter((r) => r.success && r.oldIP !== r.newIP);
   const dnsUnchanged = initialDnsResults.filter((r) => r.success && r.oldIP === r.newIP);
@@ -454,8 +494,8 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
       console.log(
         chalk.gray(`\n[${new Date().toLocaleTimeString()}] Checking for IP changes...\n`)
       );
-      const dnsResults = await updateDNSRecords();
-      const accessResults = await updateAccessPolicies();
+      const dnsResults = await updateDNSRecords(deps);
+      const accessResults = await updateAccessPolicies(deps);
 
       const dnsUpdated = dnsResults.filter((r) => r.success && r.oldIP !== r.newIP);
       const dnsUnchanged = dnsResults.filter((r) => r.success && r.oldIP === r.newIP);
@@ -517,11 +557,11 @@ export async function startUpdateLoop(intervalMinutes?: number): Promise<void> {
 /**
  * Performs a single DNS update check
  */
-export async function runSingleUpdate(): Promise<void> {
+export async function runSingleUpdate(deps: UpdaterDeps = defaultDeps): Promise<void> {
   console.log(chalk.bold.cyan('\n🔄 Checking for IP changes...\n'));
 
-  const dnsResults = await updateDNSRecords();
-  const accessResults = await updateAccessPolicies();
+  const dnsResults = await updateDNSRecords(deps);
+  const accessResults = await updateAccessPolicies(deps);
 
   const dnsUpdated = dnsResults.filter((r) => r.success && r.oldIP !== r.newIP);
   const dnsUnchanged = dnsResults.filter((r) => r.success && r.oldIP === r.newIP);

@@ -16,10 +16,14 @@ pre-commit:
       glob: '*.{ts,tsx}'
       run: bun check:types
       priority: 2
+    test:
+      glob: '{src,tests}/**/*.{ts,tsx}'
+      run: bun test
+      priority: 3
     knip:
       glob: '*'
       run: bun knip
-      priority: 3
+      priority: 4
 
 # Validate build before pushing
 pre-push:
