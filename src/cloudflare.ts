@@ -6,7 +6,7 @@ export interface Zone {
   status: string;
 }
 
-export interface DNSRecord {
+interface DNSRecord {
   id: string;
   type: string;
   name: string;
@@ -72,10 +72,8 @@ interface AccessPolicyUpdateParams {
 
 export class CloudflareService {
   private client: Cloudflare;
-  private apiKey: string;
 
   constructor(apiKey: string, email?: string) {
-    this.apiKey = apiKey;
     this.client = new Cloudflare({
       apiToken: apiKey,
       apiEmail: email,

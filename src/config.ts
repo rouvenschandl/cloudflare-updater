@@ -1,14 +1,14 @@
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { homedir } from 'os';
-import { existsSync } from 'fs';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const CONFIG_DIR = join(homedir(), '.cloudflare-updater');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.enc');
 const ENCRYPTION_KEY = process.env.CF_ENCRYPTION_KEY || 'default-key-please-change';
 
-export interface ZoneConfig {
+interface ZoneConfig {
   zoneId: string;
   zoneName: string;
   selectedRecordIds: string[];
@@ -21,7 +21,7 @@ export interface AccessPolicyConfig {
   policyName: string;
 }
 
-export interface Config {
+interface Config {
   apiKey: string;
   email?: string;
   accountId?: string;
@@ -110,7 +110,7 @@ function encrypt(text: string): string {
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
 
-  return iv.toString('hex') + ':' + encrypted;
+  return `${iv.toString('hex')}:${encrypted}`;
 }
 
 /**
@@ -172,7 +172,7 @@ export function hasConfig(): boolean {
  */
 export async function deleteConfig(): Promise<void> {
   if (existsSync(CONFIG_FILE)) {
-    const { unlink } = await import('fs/promises');
+    const { unlink } = await import('node:fs/promises');
     await unlink(CONFIG_FILE);
   }
 }

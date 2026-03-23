@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
-import { loadConfig } from './config.js';
 import { CloudflareService } from './cloudflare.js';
+import { loadConfig } from './config.js';
 import { getPublicIPs } from './ip.js';
 import { sendNotification } from './notifications.js';
 
@@ -259,8 +259,7 @@ async function updateAccessPolicies(): Promise<AccessUpdateResult[]> {
         const normalizedNew = normalizeIp(ipv4);
 
         // Preserve existing CIDR suffix if present
-        const cidrSuffix =
-          rawPolicyIp && rawPolicyIp.includes('/') ? rawPolicyIp.split('/')[1] : undefined;
+        const cidrSuffix = rawPolicyIp?.includes('/') ? rawPolicyIp.split('/')[1] : undefined;
         const newPolicyIp = cidrSuffix ? `${ipv4}/${cidrSuffix}` : ipv4;
 
         // Check if IP has changed (ignore CIDR differences like /32)

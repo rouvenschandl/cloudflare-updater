@@ -129,7 +129,7 @@ This will prompt you through creating a properly formatted commit message.
 ## Code Style
 
 - Use TypeScript for all source code
-- Follow the existing code style (enforced by ESLint and Prettier)
+- Follow the existing code style (enforced by Biome)
 - Write clear, descriptive variable and function names
 - Add comments for complex logic
 - Keep functions small and focused

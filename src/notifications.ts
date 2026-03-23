@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 
-export interface UpdateNotification {
+interface UpdateNotification {
   type: 'dns_update' | 'access_update' | 'dns_failed' | 'access_failed';
   zoneName?: string;
   recordName?: string;
@@ -15,10 +15,7 @@ export interface UpdateNotification {
 /**
  * Sends a notification to Discord via webhook
  */
-export async function notifyDiscord(
-  webhookUrl: string,
-  notification: UpdateNotification
-): Promise<void> {
+async function notifyDiscord(webhookUrl: string, notification: UpdateNotification): Promise<void> {
   try {
     const color = notification.type.includes('failed') ? 15158332 : 3066993; // Red or Green
 
@@ -97,10 +94,7 @@ export async function notifyDiscord(
 /**
  * Sends a notification to Slack via webhook
  */
-export async function notifySlack(
-  webhookUrl: string,
-  notification: UpdateNotification
-): Promise<void> {
+async function notifySlack(webhookUrl: string, notification: UpdateNotification): Promise<void> {
   try {
     const color =
       notification.type === 'dns_update' || notification.type === 'access_update'

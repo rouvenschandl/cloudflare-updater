@@ -1,15 +1,15 @@
-import { select, confirm, password, checkbox, input } from '@inquirer/prompts';
+import { checkbox, confirm, input, password, select } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { CloudflareService, type Zone, type AccessApp, type AccessPolicy } from './cloudflare.js';
+import { type AccessApp, type AccessPolicy, CloudflareService, type Zone } from './cloudflare.js';
 import {
-  saveConfig,
-  loadConfig,
+  type AccessPolicyConfig,
   deleteConfig,
   hasConfig,
-  type AccessPolicyConfig,
+  loadConfig,
+  saveConfig,
 } from './config.js';
-import { startUpdateLoop, runSingleUpdate } from './updater.js';
+import { runSingleUpdate, startUpdateLoop } from './updater.js';
 
 interface ZoneConfig {
   zoneId: string;
@@ -206,7 +206,7 @@ async function promptForAccessPolicies(
       choices: policies.map((policy) => {
         const ipRanges = policy.include
           .filter((inc) => inc.ip)
-          .map((inc) => inc.ip!.ip)
+          .map((inc) => inc.ip?.ip)
           .join(', ');
         return {
           name: `${chalk.cyan(policy.name)} ${chalk.gray(`(${policy.decision})`)} → ${chalk.yellow(ipRanges)}`,
@@ -335,7 +335,7 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
       default: '5',
       validate: (value) => {
         const num = parseInt(value, 10);
-        if (isNaN(num) || num < 1) {
+        if (Number.isNaN(num) || num < 1) {
           return 'Please enter a valid number greater than 0';
         }
         return true;
@@ -467,7 +467,7 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
 /**
  * Displays detailed information about configured records
  */
-export async function showRecordsList(): Promise<void> {
+async function showRecordsList(): Promise<void> {
   const config = await loadConfig();
 
   if (!config || config.zones.length === 0) {
@@ -555,7 +555,7 @@ export async function showRecordsList(): Promise<void> {
         selectedPolicies.forEach((policy) => {
           const ipRanges = policy.include
             .filter((inc) => inc.ip)
-            .map((inc) => inc.ip!.ip)
+            .map((inc) => inc.ip?.ip)
             .join(', ');
           const decisionBadge =
             policy.decision === 'allow' ? chalk.green('[Allow]') : chalk.red('[Deny]');
@@ -827,7 +827,7 @@ export async function showMainMenu(): Promise<void> {
             default: currentInterval.toString(),
             validate: (value) => {
               const num = parseInt(value, 10);
-              if (isNaN(num) || num < 1) {
+              if (Number.isNaN(num) || num < 1) {
                 return 'Please enter a valid number greater than 0';
               }
               return true;

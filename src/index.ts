@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import chalk from 'chalk';
 import { hasConfig } from './config.js';
-import { runSetup, showCurrentConfig, showMainMenu } from './setup.js';
 import { getPublicIPs } from './ip.js';
+import { runSetup, showCurrentConfig, showMainMenu } from './setup.js';
 
 /**
  * Displays the IP address in the top right of the terminal

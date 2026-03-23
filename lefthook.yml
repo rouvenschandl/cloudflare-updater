@@ -1,10 +1,29 @@
-pre-commit:
-  parallel: true
-  commands:
-    lint-staged:
-      run: bunx lint-staged
-
+# Validate commit messages
 commit-msg:
   commands:
     commitlint:
-      run: bunx commitlint --edit {1}
+      run: bunx commitlint --edit $1
+
+# Validate content before committing
+pre-commit:
+  commands:
+    check:
+      glob: '*'
+      run: bun check:fix
+      stage_fixed: true
+      priority: 1
+    check-types:
+      glob: '*.{ts,tsx}'
+      run: bun check:types
+      priority: 2
+    knip:
+      glob: '*'
+      run: bun knip
+      priority: 3
+
+# Validate build before pushing
+pre-push:
+  commands:
+    build:
+      glob: '*'
+      run: bun run build
