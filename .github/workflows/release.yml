@@ -15,8 +15,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     outputs:
-      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
-      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+      release_ref: ${{ steps.release_ref.outputs.ref }}
+      release_version: ${{ steps.release_ref.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -52,15 +52,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bunx semantic-release
 
+      - name: Resolve release ref and version
+        id: release_ref
+        run: |
+          TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+
+          if [ -n "$TAG" ]; then
+            VERSION="${TAG#v}"
+            REF="$TAG"
+          else
+            VERSION="$(node -p "require('./package.json').version")"
+            REF="$GITHUB_SHA"
+          fi
+
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
   docker:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.release.outputs.release_ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -78,9 +93,11 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}},value=v${{ needs.release.outputs.new_release_version }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.release.outputs.new_release_version }}
-            type=semver,pattern={{major}},value=v${{ needs.release.outputs.new_release_version }}
+            type=raw,value=v${{ needs.release.outputs.release_version }}
+            type=raw,value=${{ needs.release.outputs.release_version }}
+            type=semver,pattern={{version}},value=v${{ needs.release.outputs.release_version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.release.outputs.release_version }}
+            type=semver,pattern={{major}},value=v${{ needs.release.outputs.release_version }}
             type=raw,value=latest
 
       - name: Build and push
