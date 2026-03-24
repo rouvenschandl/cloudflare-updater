@@ -25,7 +25,7 @@ async function promptForApiKey(): Promise<string> {
   console.log(chalk.gray('You need a Cloudflare API Token with the following permissions:'));
   console.log(chalk.gray('  - Zone:Read'));
   console.log(chalk.gray('  - DNS:Edit'));
-  console.log(chalk.gray('  - Firewall:Edit\n'));
+  console.log(chalk.gray('  - Access: Apps and Policies: Edit'));
 
   const apiKey = await password({
     message: 'Cloudflare API Token:',
@@ -176,6 +176,18 @@ async function promptForAccessApp(
     return selectedApp || null;
   } catch (error) {
     spinner.fail('Error loading Access applications');
+
+    if (
+      error instanceof Error &&
+      (error.message.includes('403') ||
+        error.message.includes('Authentication error') ||
+        error.message.includes('"code":10000'))
+    ) {
+      throw new Error(
+        `${error.message}\nHint: Your API token is missing Access scopes. Add account-level "Access: Apps and Policies Read" (and "Write" for policy updates).`
+      );
+    }
+
     throw error;
   }
 }
@@ -220,6 +232,18 @@ async function promptForAccessPolicies(
     return policies.filter((p) => selectedPolicyIds.includes(p.id));
   } catch (error) {
     spinner.fail('Error loading Access policies');
+
+    if (
+      error instanceof Error &&
+      (error.message.includes('403') ||
+        error.message.includes('Authentication error') ||
+        error.message.includes('"code":10000'))
+    ) {
+      throw new Error(
+        `${error.message}\nHint: Your API token is missing Access scopes. Add account-level "Access: Apps and Policies Read" (and "Write" for policy updates).`
+      );
+    }
+
     throw error;
   }
 }
