@@ -1,3 +1,16 @@
+# [1.2.0](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.1.2...v1.2.0) (2026-03-24)
+
+
+### Bug Fixes
+
+* require API key and at least one of zones or access policies in loadEnvConfig ([b083755](https://github.com/rouvenschandl/cloudflare-updater/commit/b083755dffe3f9881fab76ae5971b61c8b670225))
+* update API token permission message ([021d2ea](https://github.com/rouvenschandl/cloudflare-updater/commit/021d2ea83a41d3b17fe752f76ceee4aa7392c151))
+
+
+### Features
+
+* make DNS zones and records optional ([bcecc55](https://github.com/rouvenschandl/cloudflare-updater/commit/bcecc553fa16b0df4f59afcd0acb73ad052dc9a5))
+
 ## [1.1.2](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.1.1...v1.1.2) (2026-03-23)
 
 
