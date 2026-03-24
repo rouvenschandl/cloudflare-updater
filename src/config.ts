@@ -62,11 +62,12 @@ function loadEnvConfig(): Config | null {
     'CF_ACCESS_POLICIES'
   );
 
-  if (!apiKey || !zonesEnv || zonesEnv.length === 0) {
+  // Require API key, and at least zones OR access policies
+  if (!apiKey || (!zonesEnv && !accessPoliciesEnv)) {
     return null;
   }
 
-  const normalizedZones: ZoneConfig[] = zonesEnv.map((zone) => ({
+  const normalizedZones: ZoneConfig[] = (zonesEnv || []).map((zone) => ({
     zoneId: zone.zoneId,
     zoneName: zone.zoneName,
     selectedRecordIds:
