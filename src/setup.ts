@@ -103,13 +103,14 @@ async function promptForDNSRecords(
     console.log(chalk.bold.cyan('\n📝 DNS Records:\n'));
 
     const selectedRecordIds = await checkbox({
-      message: 'Select DNS records to update automatically:',
+      message:
+        'Select DNS records to update automatically (optional - leave empty to use only Access policies):',
       choices: allRecords.map((record) => ({
         name: `${chalk.cyan(record.name)} ${chalk.gray(`(${record.type})`)} → ${chalk.yellow(record.content)}${record.proxied ? chalk.gray(' [Proxied]') : ''}`,
         value: record.id,
         checked: false,
       })),
-      required: true,
+      required: false,
     });
 
     return selectedRecordIds;
@@ -260,41 +261,61 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
     // 2. Initialize Cloudflare Service
     const cfService = new CloudflareService(apiKey);
 
-    // 3. Configure zones
+    // 3. Choose what to configure
+    const configureDNS = await confirm({
+      message: 'Do you want to configure DNS record updates?',
+      default: true,
+    });
+
+    // 3a. Configure zones (optional)
     const zones: ZoneConfig[] = [];
-    let addMoreZones = true;
+    if (configureDNS) {
+      let addMoreZones = true;
 
-    while (addMoreZones) {
-      // Fetch and display zones
-      const selectedZone = await promptForZone(cfService);
+      while (addMoreZones) {
+        // Fetch and display zones
+        const selectedZone = await promptForZone(cfService);
 
-      // Select DNS records to update
-      const selectedRecordIds = await promptForDNSRecords(cfService, selectedZone.id);
+        // Select DNS records to update
+        const selectedRecordIds = await promptForDNSRecords(cfService, selectedZone.id);
 
-      if (selectedRecordIds.length > 0) {
-        zones.push({
-          zoneId: selectedZone.id,
-          zoneName: selectedZone.name,
-          selectedRecordIds,
+        if (selectedRecordIds.length > 0) {
+          zones.push({
+            zoneId: selectedZone.id,
+            zoneName: selectedZone.name,
+            selectedRecordIds,
+          });
+          console.log(
+            chalk.green(
+              `\n✓ ${selectedRecordIds.length} record(s) selected for ${selectedZone.name}\n`
+            )
+          );
+        } else {
+          // No DNS records selected, but still allow zone config for Access policies
+          const confirmZoneWithoutRecords = await confirm({
+            message: `No DNS records selected for ${selectedZone.name}. Continue without DNS updates (you can use Access policies)?`,
+            default: false,
+          });
+
+          if (confirmZoneWithoutRecords) {
+            zones.push({
+              zoneId: selectedZone.id,
+              zoneName: selectedZone.name,
+              selectedRecordIds: [],
+            });
+            console.log(
+              chalk.yellow(`\n✓ Zone ${selectedZone.name} configured without DNS records\n`)
+            );
+          } else {
+            console.log(chalk.yellow(`\n⚠ Zone ${selectedZone.name} skipped.\n`));
+          }
+        }
+
+        addMoreZones = await confirm({
+          message: 'Do you want to add another zone?',
+          default: false,
         });
-        console.log(
-          chalk.green(
-            `\n✓ ${selectedRecordIds.length} record(s) selected for ${selectedZone.name}\n`
-          )
-        );
-      } else {
-        console.log(chalk.yellow(`\n⚠ No records selected for ${selectedZone.name}.\n`));
       }
-
-      addMoreZones = await confirm({
-        message: 'Do you want to add another zone?',
-        default: false,
-      });
-    }
-
-    if (zones.length === 0) {
-      console.log(chalk.yellow('\n⚠ No zones configured. Exiting setup.\n'));
-      return;
     }
 
     // Calculate total records
@@ -413,9 +434,20 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
       }
     }
 
-    // 8. Save configuration
+    // 8. Validate configuration
     const totalAccessPolicies = accessPolicies.length;
-    let confirmMessage = `Do you want to save this configuration?\n  Zones: ${chalk.cyan(zones.length.toString())}\n  DNS Records: ${chalk.cyan(totalRecords.toString())}`;
+    if (zones.length === 0 && totalAccessPolicies === 0) {
+      console.log(
+        chalk.red('\n✗ Error: At least one DNS zone or Access policy must be configured.\n')
+      );
+      return;
+    }
+
+    // 9. Save configuration
+    let confirmMessage = 'Do you want to save this configuration?';
+    if (zones.length > 0) {
+      confirmMessage += `\n  Zones: ${chalk.cyan(zones.length.toString())}\n  DNS Records: ${chalk.cyan(totalRecords.toString())}`;
+    }
     if (totalAccessPolicies > 0) {
       confirmMessage += `\n  Access Policies: ${chalk.cyan(totalAccessPolicies.toString())}`;
     }
@@ -439,12 +471,17 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
       console.log(chalk.green('\n✓ Configuration saved successfully!\n'));
 
       // Display summary
-      console.log(chalk.bold.cyan('\n📍 Configured Zones:\n'));
-      zones.forEach((zone) => {
-        console.log(
-          `  ${chalk.cyan('●')} ${chalk.bold(zone.zoneName)} - ${zone.selectedRecordIds.length} record(s)`
-        );
-      });
+      if (zones.length > 0) {
+        console.log(chalk.bold.cyan('\n📍 Configured Zones:\n'));
+        zones.forEach((zone) => {
+          const recordCount = zone.selectedRecordIds.length;
+          const recordLabel =
+            recordCount === 0 ? chalk.gray('(Access policies only)') : `${recordCount} record(s)`;
+          console.log(`  ${chalk.cyan('●')} ${chalk.bold(zone.zoneName)} - ${recordLabel}`);
+        });
+      } else {
+        console.log(chalk.yellow('\n⚠ No DNS zones configured (using Access policies only)\n'));
+      }
 
       if (accessPolicies.length > 0) {
         console.log(chalk.bold.cyan('\n🔐 Configured Access Policies:\n'));
@@ -494,52 +531,57 @@ export async function runSetup(existingApiKey?: string): Promise<void> {
 async function showRecordsList(): Promise<void> {
   const config = await loadConfig();
 
-  if (!config || config.zones.length === 0) {
+  if (!config) {
     console.log(chalk.yellow('\n⚠ No configuration found.\n'));
     return;
   }
 
   console.clear();
-  console.log(chalk.bold.cyan('\n📋 Configured DNS Records:\n'));
 
   const cfService = new CloudflareService(config.apiKey);
 
-  for (const zone of config.zones) {
-    console.log(chalk.bold(`\n  Zone: ${chalk.cyan(zone.zoneName)}`));
-    console.log(chalk.gray(`  ════════════════════════════════════════\n`));
+  if (config.zones.length > 0) {
+    console.log(chalk.bold.cyan('\n📋 Configured DNS Records:\n'));
 
-    const spinner = ora(`Loading records for ${zone.zoneName}...`).start();
+    for (const zone of config.zones) {
+      console.log(chalk.bold(`\n  Zone: ${chalk.cyan(zone.zoneName)}`));
+      console.log(chalk.gray(`  ════════════════════════════════════════\n`));
 
-    try {
-      const [aRecords, aaaaRecords] = await Promise.all([
-        cfService.getDNSRecords(zone.zoneId, 'A'),
-        cfService.getDNSRecords(zone.zoneId, 'AAAA'),
-      ]);
+      const spinner = ora(`Loading records for ${zone.zoneName}...`).start();
 
-      const allRecords = [...aRecords, ...aaaaRecords];
-      const selectedRecords = allRecords.filter((r) => zone.selectedRecordIds.includes(r.id));
+      try {
+        const [aRecords, aaaaRecords] = await Promise.all([
+          cfService.getDNSRecords(zone.zoneId, 'A'),
+          cfService.getDNSRecords(zone.zoneId, 'AAAA'),
+        ]);
 
-      spinner.stop();
+        const allRecords = [...aRecords, ...aaaaRecords];
+        const selectedRecords = allRecords.filter((r) => zone.selectedRecordIds.includes(r.id));
 
-      if (selectedRecords.length === 0) {
-        console.log(chalk.yellow('    No records configured\n'));
-        continue;
-      }
+        spinner.stop();
 
-      selectedRecords.forEach((record) => {
-        const proxiedBadge = record.proxied ? chalk.gray('[Proxied]') : chalk.gray('[DNS Only]');
-        const typeBadge = record.type === 'A' ? chalk.blue('[A]   ') : chalk.magenta('[AAAA]');
+        if (selectedRecords.length === 0) {
+          console.log(chalk.yellow('    No records configured\n'));
+          continue;
+        }
+
+        selectedRecords.forEach((record) => {
+          const proxiedBadge = record.proxied ? chalk.gray('[Proxied]') : chalk.gray('[DNS Only]');
+          const typeBadge = record.type === 'A' ? chalk.blue('[A]   ') : chalk.magenta('[AAAA]');
+          console.log(
+            `    ${typeBadge} ${chalk.white(record.name.padEnd(30))} → ${chalk.yellow(record.content.padEnd(15))} ${proxiedBadge}`
+          );
+        });
+        console.log();
+      } catch (error) {
+        spinner.fail(`Failed to load records for ${zone.zoneName}`);
         console.log(
-          `    ${typeBadge} ${chalk.white(record.name.padEnd(30))} → ${chalk.yellow(record.content.padEnd(15))} ${proxiedBadge}`
+          chalk.red(`    Error: ${error instanceof Error ? error.message : 'Unknown error'}\n`)
         );
-      });
-      console.log();
-    } catch (error) {
-      spinner.fail(`Failed to load records for ${zone.zoneName}`);
-      console.log(
-        chalk.red(`    Error: ${error instanceof Error ? error.message : 'Unknown error'}\n`)
-      );
+      }
     }
+  } else {
+    console.log(chalk.yellow('\n⚠ No DNS zones configured (using Access policies only)\n'));
   }
 
   // Display Access Policies
@@ -627,20 +669,26 @@ export async function showCurrentConfig(): Promise<void> {
   const updateInterval = config.updateInterval || 5;
 
   console.log(chalk.bold.cyan('\n⚙️  Current Configuration:\n'));
-  console.log(`  ${chalk.bold('Zones:')}    ${config.zones.length}`);
-  console.log(`  ${chalk.bold('DNS Records:')} ${totalRecords}`);
+  if (config.zones.length > 0) {
+    console.log(`  ${chalk.bold('Zones:')}    ${config.zones.length}`);
+    console.log(`  ${chalk.bold('DNS Records:')} ${totalRecords}`);
+  } else {
+    console.log(`  ${chalk.bold('Zones:')}    ${chalk.yellow('None (Access only)')}`);
+  }
   if (totalAccessPolicies > 0) {
     console.log(`  ${chalk.bold('Access Policies:')} ${totalAccessPolicies}`);
   }
   console.log(`  ${chalk.bold('Update Interval:')} ${updateInterval} minute(s)`);
   console.log(`  ${chalk.bold('API Key:')} ${chalk.gray('*'.repeat(20))}`);
 
-  console.log(chalk.bold.cyan('\n  Configured Zones:\n'));
-  config.zones.forEach((zone) => {
-    console.log(
-      `    ${chalk.cyan('●')} ${zone.zoneName.padEnd(30)} - ${zone.selectedRecordIds.length} record(s)`
-    );
-  });
+  if (config.zones.length > 0) {
+    console.log(chalk.bold.cyan('\n  Configured Zones:\n'));
+    config.zones.forEach((zone) => {
+      console.log(
+        `    ${chalk.cyan('●')} ${zone.zoneName.padEnd(30)} - ${zone.selectedRecordIds.length} record(s)`
+      );
+    });
+  }
 
   if (config.accessPolicies && config.accessPolicies.length > 0) {
     console.log(chalk.bold.cyan('\n  Configured Access Applications:\n'));
