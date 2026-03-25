@@ -1,31 +1,38 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 
-const publicIpv4Mock = mock<() => Promise<string>>();
-const publicIpv6Mock = mock<() => Promise<string>>();
-
-mock.module('public-ip', () => ({
-  publicIpv4: publicIpv4Mock,
-  publicIpv6: publicIpv6Mock,
-}));
+const fetchMock = mock<typeof fetch>();
+globalThis.fetch = fetchMock as unknown as typeof fetch;
 
 const { getPublicIPv4, getPublicIPv6, getPublicIPs } = await import('./ip.js');
 
 afterEach(() => {
-  publicIpv4Mock.mockReset();
-  publicIpv6Mock.mockReset();
+  fetchMock.mockReset();
 });
 
+function createResponse(value: string, ok = true): Response {
+  return {
+    ok,
+    text: async () => value,
+  } as Response;
+}
+
 describe('ip helpers', () => {
-  it('returns IPv4 when lookup succeeds', async () => {
-    publicIpv4Mock.mockResolvedValue('203.0.113.10');
+  it('returns IPv4 when a majority agrees', async () => {
+    fetchMock
+      .mockResolvedValueOnce(createResponse('203.0.113.10'))
+      .mockResolvedValueOnce(createResponse('203.0.113.10'))
+      .mockResolvedValueOnce(createResponse('198.51.100.4'));
 
     const result = await getPublicIPv4();
 
     expect(result).toBe('203.0.113.10');
   });
 
-  it('returns null when IPv4 lookup throws', async () => {
-    publicIpv4Mock.mockRejectedValue(new Error('network error'));
+  it('returns null when IPv4 sources disagree without majority', async () => {
+    fetchMock
+      .mockResolvedValueOnce(createResponse('203.0.113.10'))
+      .mockResolvedValueOnce(createResponse('198.51.100.4'))
+      .mockRejectedValueOnce(new Error('network error'));
 
     const result = await getPublicIPv4();
 
@@ -33,7 +40,10 @@ describe('ip helpers', () => {
   });
 
   it('returns IPv6 when lookup succeeds', async () => {
-    publicIpv6Mock.mockResolvedValue('2001:db8::1');
+    fetchMock
+      .mockResolvedValueOnce(createResponse('2001:db8::1'))
+      .mockResolvedValueOnce(createResponse('2001:db8::1'))
+      .mockResolvedValueOnce(createResponse('')); // invalid IPv6
 
     const result = await getPublicIPv6();
 
@@ -41,8 +51,15 @@ describe('ip helpers', () => {
   });
 
   it('returns both normalized IPs from getPublicIPs', async () => {
-    publicIpv4Mock.mockResolvedValue('203.0.113.20');
-    publicIpv6Mock.mockResolvedValue('2001:db8::20');
+    fetchMock
+      // IPv4 lookups
+      .mockResolvedValueOnce(createResponse('203.0.113.20'))
+      .mockResolvedValueOnce(createResponse('203.0.113.20'))
+      .mockResolvedValueOnce(createResponse('203.0.113.20'))
+      // IPv6 lookups
+      .mockResolvedValueOnce(createResponse('2001:db8::20'))
+      .mockResolvedValueOnce(createResponse('2001:db8::20'))
+      .mockResolvedValueOnce(createResponse('2001:db8::20'));
 
     const result = await getPublicIPs();
 
@@ -53,8 +70,15 @@ describe('ip helpers', () => {
   });
 
   it('returns undefined values when both lookups fail', async () => {
-    publicIpv4Mock.mockRejectedValue(new Error('v4 down'));
-    publicIpv6Mock.mockRejectedValue(new Error('v6 down'));
+    fetchMock
+      // IPv4 lookups
+      .mockRejectedValueOnce(new Error('v4 down'))
+      .mockRejectedValueOnce(new Error('v4 down'))
+      .mockRejectedValueOnce(new Error('v4 down'))
+      // IPv6 lookups
+      .mockRejectedValueOnce(new Error('v6 down'))
+      .mockRejectedValueOnce(new Error('v6 down'))
+      .mockRejectedValueOnce(new Error('v6 down'));
 
     const result = await getPublicIPs();
 
