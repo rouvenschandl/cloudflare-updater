@@ -1,3 +1,12 @@
+## [1.2.1](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.2.0...v1.2.1) (2026-03-25)
+
+
+### Bug Fixes
+
+* **ip:** stabilize public IP detection using multi-source consensus ([2a59fc8](https://github.com/rouvenschandl/cloudflare-updater/commit/2a59fc83935854245370e71dad3419c0a08d9b13))
+* remove unused esbuild and tsx dependencies from bun.lock ([f5e8e8d](https://github.com/rouvenschandl/cloudflare-updater/commit/f5e8e8db7e741ea1545264e738fe364273f80ff2))
+* update dev and start scripts to use bun instead of tsx and node ([4fac6ab](https://github.com/rouvenschandl/cloudflare-updater/commit/4fac6abfb8674da1799462325b45fd459b4a869b))
+
 # [1.2.0](https://github.com/rouvenschandl/cloudflare-updater/compare/v1.1.2...v1.2.0) (2026-03-24)
 
 
