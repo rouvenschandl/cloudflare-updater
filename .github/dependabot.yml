@@ -1,44 +1,67 @@
 version: 2
 updates:
-  # Enable version updates for bun (via npm ecosystem - auto-detects bun.lock)
-  - package-ecosystem: "npm"
-    directory: "/"
+  # Enable version updates for bun
+  - package-ecosystem: bun
+    # Look for `package.json` and `lock` files in the root directory
+    directory: /
+    # Check the npm registry for updates every week
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-    open-pull-requests-limit: 10
-    reviewers:
+      interval: weekly
+    # Limit the number of open pull requests for version updates to 1
+    open-pull-requests-limit: 1
+    # Group updates into a single pull request
+    groups:
+      # The name of the group (identifier)
+      bun-deps:
+        update-types: [minor, patch]
+    # Only allow minor and patch updates
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    # Automatically assign the pull request to the specified user
+    assignees:
       - rouvenschandl
-    commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(dev-deps)"
-      include: "scope"
 
   # Enable version updates for GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    # Look for `.github/workflows` in the root directory
+    directory: /
+    # Check GitHub Actions for updates every week
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-    open-pull-requests-limit: 10
-    reviewers:
+      interval: weekly
+    # Limit the number of open pull requests for version updates to 1
+    open-pull-requests-limit: 1
+    # Group updates into a single pull request
+    groups:
+      # The name of the group (identifier)
+      github-actions:
+        update-types: [minor, patch]
+    # Only allow minor and patch updates
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    # Automatically assign the pull request to the specified user
+    assignees:
       - rouvenschandl
-    commit-message:
-      prefix: "ci(actions)"
-      include: "scope"
 
   # Enable version updates for Docker
   - package-ecosystem: "docker"
-    directory: "/"
+    # Look for `Dockerfile` in the root directory
+    directory: /
+    # Check GitHub Actions for updates every week
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-    open-pull-requests-limit: 5
-    reviewers:
+      interval: weekly
+    # Limit the number of open pull requests for version updates to 1
+    open-pull-requests-limit: 1
+    # Group updates into a single pull request
+    groups:
+      # The name of the group (identifier)
+      docker:
+        update-types: [minor, patch]
+    # Only allow minor and patch updates
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    # Automatically assign the pull request to the specified user
+    assignees:
       - rouvenschandl
-    commit-message:
-      prefix: "ci(docker)"
-      include: "scope"
